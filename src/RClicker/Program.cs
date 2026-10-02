@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using RClicker.Native;
+using RClicker.Relay;
 using RClicker.UI;
 
 namespace RClicker;
@@ -57,10 +58,27 @@ internal static class Program
             e.SetObserved();
         };
 
-        using var form = new MainForm(options, loggerFactory, b => ConfigureLogging(b, options));
+        var (relay, relayError) = ResolveRelay(options);
+        using var form = new MainForm(relay, relayError, loggerFactory);
         Application.Run(form);
         logger.LogInformation("{App} stopped", AppInfo.Name);
         return 0;
+    }
+
+    /// <summary>--relay, then the RCLICKER_RELAY environment variable, then the address built into this copy.</summary>
+    private static (Uri? Relay, string? Error) ResolveRelay(CommandLineOptions options)
+    {
+        var text = options.Relay
+            ?? Environment.GetEnvironmentVariable("RCLICKER_RELAY")
+            ?? AppInfo.BuiltInRelay;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return (null, "No relay address is configured.");
+        }
+
+        return RelayUrls.TryParse(text, out var relay)
+            ? (relay, null)
+            : (null, $"'{text}' is not a valid relay address (it must start with https://).");
     }
 
     private static void ConfigureLogging(ILoggingBuilder builder, CommandLineOptions options)

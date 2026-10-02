@@ -55,16 +55,4 @@ public class SessionTokenTests
         Assert.True(redacted.Length <= 5);
         Assert.Equal("(none)", SessionToken.Redact(null));
     }
-
-    [Fact]
-    public void FixedTimeEquals_ComparesExactly()
-    {
-        var token = SessionToken.Generate();
-
-        Assert.True(SessionToken.FixedTimeEquals(token, token));
-        var flipped = (token[0] == 'A' ? 'B' : 'A') + token[1..];
-        Assert.False(SessionToken.FixedTimeEquals(token, flipped));
-        Assert.False(SessionToken.FixedTimeEquals(token, token[..^1]));
-        Assert.False(SessionToken.FixedTimeEquals(token, null));
-    }
 }

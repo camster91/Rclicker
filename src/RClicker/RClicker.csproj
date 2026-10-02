@@ -32,6 +32,21 @@
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
+  <!-- Relay built into this copy. Override with: dotnet publish ... -p:RelayUrl=https://<your relay> -->
+  <PropertyGroup>
+    <RelayUrl Condition="'$(RelayUrl)' == ''">https://rclicker.cameron-rotman.workers.dev</RelayUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="RelayUrl" Value="$(RelayUrl)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\RClicker.Core\RClicker.Core.csproj" />
   </ItemGroup>

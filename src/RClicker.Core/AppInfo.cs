@@ -9,6 +9,13 @@ public static class AppInfo
     /// <summary>Semantic version from the build (e.g. "0.1.0"), without the git hash suffix.</summary>
     public static string Version { get; } = ReadVersion();
 
+    /// <summary>
+    /// Relay address baked in at build time (MSBuild property RelayUrl), or empty.
+    /// </summary>
+    public static string? BuiltInRelay { get; } = Assembly.GetEntryAssembly()?
+        .GetCustomAttributes<AssemblyMetadataAttribute>()
+        .FirstOrDefault(a => a.Key == "RelayUrl")?.Value;
+
     private static string ReadVersion()
     {
         var info = typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;

@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using RClicker.Presentation;
 
-namespace RClicker.Server;
+namespace RClicker.Protocol;
 
 public enum ClientMessageKind
 {

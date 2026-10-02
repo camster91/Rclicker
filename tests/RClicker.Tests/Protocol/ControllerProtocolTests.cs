@@ -1,8 +1,8 @@
 using System.Text.Json;
 using RClicker.Presentation;
-using RClicker.Server;
+using RClicker.Protocol;
 
-namespace RClicker.Tests.Server;
+namespace RClicker.Tests.Protocol;
 
 public class ControllerProtocolTests
 {

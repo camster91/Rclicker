@@ -6,38 +6,16 @@ namespace RClicker.Tests.Sessions;
 public class SessionManagerTests
 {
     [Fact]
-    public void NewManager_HasAValidCurrentSession()
+    public void NewManager_HasAWellFormedSession()
     {
         var sessions = new SessionManager();
 
-        Assert.Equal(SessionValidationResult.Valid, sessions.Validate(sessions.Current.Token));
+        Assert.True(SessionToken.IsWellFormed(sessions.Current.Token));
         Assert.Equal(1, sessions.Current.Generation);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void Validate_RejectsMissingToken(string? token)
-    {
-        var sessions = new SessionManager();
-
-        Assert.Equal(SessionValidationResult.Missing, sessions.Validate(token));
-    }
-
     [Fact]
-    public void Validate_RejectsInvalidTokens()
-    {
-        var sessions = new SessionManager();
-        var real = sessions.Current.Token;
-
-        Assert.Equal(SessionValidationResult.Invalid, sessions.Validate(SessionToken.Generate()));
-        Assert.Equal(SessionValidationResult.Invalid, sessions.Validate("not-a-token"));
-        Assert.Equal(SessionValidationResult.Invalid, sessions.Validate(real[..^1] + (real[^1] == 'A' ? 'B' : 'A')));
-        Assert.Equal(SessionValidationResult.Invalid, sessions.Validate(real + "x"));
-    }
-
-    [Fact]
-    public void Regenerate_InvalidatesThePreviousToken()
+    public void Regenerate_ReplacesTheKey_AndAnnouncesIt()
     {
         var sessions = new SessionManager();
         var old = sessions.Current;
@@ -50,27 +28,24 @@ public class SessionManagerTests
         Assert.Same(fresh, sessions.Current);
         Assert.Same(fresh, announced);
         Assert.Equal(old.Generation + 1, fresh.Generation);
-        Assert.Equal(SessionValidationResult.Invalid, sessions.Validate(old.Token));
-        Assert.Equal(SessionValidationResult.Valid, sessions.Validate(fresh.Token));
     }
 
     [Fact]
-    public void Validate_RejectsExpiredSession_AndRegenerateIfExpiredReplacesIt()
+    public void ExpiredSession_IsRegenerated()
     {
         var clock = new ManualTimeProvider();
         var sessions = new SessionManager(clock, TimeSpan.FromHours(1));
-        var token = sessions.Current.Token;
+        var first = sessions.Current;
 
         clock.Advance(TimeSpan.FromMinutes(59));
-        Assert.Equal(SessionValidationResult.Valid, sessions.Validate(token));
+        Assert.False(sessions.IsExpired(first));
         Assert.False(sessions.RegenerateIfExpired());
 
         clock.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(SessionValidationResult.Expired, sessions.Validate(token));
-
+        Assert.True(sessions.IsExpired(first));
         Assert.True(sessions.RegenerateIfExpired());
-        Assert.Equal(SessionValidationResult.Invalid, sessions.Validate(token));
-        Assert.Equal(SessionValidationResult.Valid, sessions.Validate(sessions.Current.Token));
+        Assert.NotEqual(first.Token, sessions.Current.Token);
+        Assert.False(sessions.IsExpired(sessions.Current));
     }
 
     [Fact]

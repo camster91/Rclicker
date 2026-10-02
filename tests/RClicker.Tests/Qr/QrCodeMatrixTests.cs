@@ -1,6 +1,5 @@
-using System.Net;
-using RClicker.Networking;
 using RClicker.Qr;
+using RClicker.Relay;
 using RClicker.Sessions;
 using ZXing;
 using ZXing.Common;
@@ -13,7 +12,7 @@ public class QrCodeMatrixTests
     [Fact]
     public void QrCode_DecodesToTheCompleteControllerUrl()
     {
-        var url = ControllerUrl.Build(IPAddress.Parse("192.168.100.200"), 65000, SessionToken.Generate()).ToString();
+        var url = PhoneUrl(SessionToken.Generate());
 
         var matrix = QrCodeMatrix.Create(url);
 
@@ -23,13 +22,14 @@ public class QrCodeMatrixTests
     [Fact]
     public void QrCode_HasQuietZoneAndStaysSmallEnoughToScanFromAcrossARoom()
     {
-        var url = ControllerUrl.Build(IPAddress.Parse("192.168.100.200"), 65000, SessionToken.Generate()).ToString();
+        var url = PhoneUrl(SessionToken.Generate());
 
         var matrix = QrCodeMatrix.Create(url);
         int size = matrix.GetLength(0);
 
-        // Version 5 = 37 modules + 2 * 4 quiet zone. Bigger versions mean smaller modules on screen.
-        Assert.True(size <= 37 + (2 * QrCodeMatrix.QuietZoneModules), $"QR is {size} modules");
+        // Version 6 = 41 modules + 2 * 4 quiet zone (the https relay link is ~100 characters).
+        // Bigger versions mean smaller modules on screen.
+        Assert.True(size <= 41 + (2 * QrCodeMatrix.QuietZoneModules), $"QR is {size} modules");
         for (int i = 0; i < size; i++)
         {
             for (int q = 0; q < QrCodeMatrix.QuietZoneModules; q++)
@@ -46,14 +46,20 @@ public class QrCodeMatrixTests
     public void NewSession_ProducesADifferentQrCode()
     {
         var sessions = new SessionManager();
-        var ip = IPAddress.Parse("10.0.0.5");
-        var before = Decode(QrCodeMatrix.Create(ControllerUrl.Build(ip, 8765, sessions.Current.Token).ToString()));
+        var before = Decode(QrCodeMatrix.Create(PhoneUrl(sessions.Current.Token)));
 
         sessions.Regenerate();
-        var after = Decode(QrCodeMatrix.Create(ControllerUrl.Build(ip, 8765, sessions.Current.Token).ToString()));
+        var after = Decode(QrCodeMatrix.Create(PhoneUrl(sessions.Current.Token)));
 
         Assert.NotEqual(before, after);
         Assert.Contains(sessions.Current.Token, after, StringComparison.Ordinal);
+    }
+
+    private static string PhoneUrl(string token)
+    {
+        // A realistically long relay host name.
+        Assert.True(RelayUrls.TryParse("https://rclicker.presentation-team-account.workers.dev", out var relay));
+        return RelayUrls.PhoneUrl(relay, token).ToString();
     }
 
     private static string Decode(bool[,] matrix, int scale = 6)
