@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using RClicker.Native;
 using RClicker.Presentation;
 using RClicker.Qr;
 using RClicker.Relay;
@@ -32,6 +33,7 @@ internal sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _expiryTimer = new() { Interval = 30_000 };
 
     private bool _userRevealedQr;
+    private bool _keepingAwake;
     private bool _closeRequested;
     private bool _readyToClose;
 
@@ -345,9 +347,37 @@ internal sealed class MainForm : Form
             _userRevealedQr = false;
         }
 
+        KeepComputerAwake(phonePresent);
+
         bool hideQr = phonePresent && !_userRevealedQr;
         _qrHiddenPanel.Visible = hideQr;
         _qrView.Visible = !hideQr;
+    }
+
+    /// <summary>
+    /// While a phone is connected, stop Windows from dimming the screen or sleeping
+    /// (the presenter may not touch the PC for a long time). Runs on the UI thread,
+    /// which owns the setting for as long as the app is open.
+    /// </summary>
+    private void KeepComputerAwake(bool awake)
+    {
+        if (awake == _keepingAwake)
+        {
+            return;
+        }
+
+        _keepingAwake = awake;
+        var flags = awake
+            ? NativeMethods.ES_CONTINUOUS | NativeMethods.ES_SYSTEM_REQUIRED | NativeMethods.ES_DISPLAY_REQUIRED
+            : NativeMethods.ES_CONTINUOUS;
+        if (NativeMethods.SetThreadExecutionState(flags) == 0)
+        {
+            _logger.LogWarning("Windows did not accept the keep-awake request");
+        }
+        else
+        {
+            _logger.LogInformation("Keep screen on: {Awake}", awake);
+        }
     }
 
     private void RegenerateSession()

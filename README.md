@@ -33,6 +33,10 @@ Relay in use: `https://rclicker.cameron-rotman.workers.dev` (built into the app)
 
 Closing the rclicker window ends the session immediately. The phone shows "rclicker closed".
 
+**Screens stay on while presenting.**
+- **Phone:** stays awake while connected (the page shows "Screen stays on while connected"). On some phones this starts after your first tap.
+- **PC:** won't dim or go to sleep while a phone is connected.
+
 ### Desktop window
 
 - **QR code + link**: what the phone opens. The QR code hides itself while a phone is connected, so the audience can't scan it off the projector (click **Show QR code** to see it again).
@@ -70,7 +74,7 @@ What IT may need to allow:
 
 - `https://rclicker.cameron-rotman.workers.dev` (some filters block `*.workers.dev` by category).
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Version 0.2 is **not code-signed** yet.
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Version 0.2.x is **not code-signed** yet.
 
 If IT can only allow a company-owned domain, the relay can run on a custom domain such as `rclicker.yourcompany.com` (see [Running your own relay](#running-your-own-relay)).
 
@@ -105,13 +109,13 @@ Details: [docs/security.md](docs/security.md).
 - Some localized PowerPoint versions use a different black-screen key. The "." (period) key on the PC keyboard also blackens the screen.
 
 **Phone shows "Reconnecting…"**
-- Normal after the phone screen locks or the signal drops. It reconnects by itself when you open it again. Your seat is kept for 30 seconds, so another phone can't take control meanwhile. While connected, the page keeps the phone screen on.
+- Normal after the phone screen locks or the signal drops. It reconnects by itself when you open it again. Your seat is kept for 30 seconds, so another phone can't take control meanwhile. While connected, the page keeps the phone screen on. If the phone says "Tap any button to keep the screen on", tap once. On very old phones, turn off auto-lock instead.
 
 **Phone shows "Session ended"**
 - The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Version 0.2 isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
+- Version 0.2.x isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
 
 ## Building from source
 

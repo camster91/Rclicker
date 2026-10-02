@@ -30,6 +30,7 @@
   var statusEl = document.getElementById('status');
   var statusText = document.getElementById('status-text');
   var messageEl = document.getElementById('message');
+  var awakeEl = document.getElementById('awake');
   var overlay = document.getElementById('overlay');
   var overlayTitle = document.getElementById('overlay-title');
   var overlayText = document.getElementById('overlay-text');
@@ -348,6 +349,7 @@
       }
       pressFeedback(button);
       sendCommand(button.getAttribute('data-command'));
+      updateWakeLock();
     });
   });
 
@@ -436,16 +438,43 @@
   }
 
   // Keep the phone screen on while presenting (HTTPS lets us use the Wake Lock API).
+  // Some browsers (notably iPhone Safari) only grant it during a tap, so every tap retries.
+  var wakePending = false;
+
   function updateWakeLock() {
     var want = state === 'connected' && document.visibilityState === 'visible';
-    if (want && !wakeLock && navigator.wakeLock) {
+    if (want && !wakeLock && !wakePending && navigator.wakeLock) {
+      wakePending = true;
       navigator.wakeLock.request('screen').then(function (lock) {
+        wakePending = false;
         wakeLock = lock;
-        lock.addEventListener('release', function () { wakeLock = null; });
-      }).catch(function () { /* not allowed right now */ });
+        showAwake(true);
+        lock.addEventListener('release', function () {
+          wakeLock = null;
+          showAwake(false);
+        });
+      }).catch(function () {
+        wakePending = false; // Not allowed right now; the next tap tries again.
+        showAwake(false);
+      });
     } else if (!want && wakeLock) {
       wakeLock.release().catch(function () { /* ignore */ });
       wakeLock = null;
+    }
+    if (!want) { showAwake(null); }
+  }
+
+  // true: screen is being kept on. false: we tried and could not. null: not presenting.
+  function showAwake(on) {
+    if (!awakeEl) { return; }
+    if (on === null) {
+      awakeEl.textContent = '';
+    } else if (on) {
+      awakeEl.textContent = 'Screen stays on while connected';
+    } else if (!navigator.wakeLock) {
+      awakeEl.textContent = "Tip: turn off your phone's auto-lock while presenting";
+    } else {
+      awakeEl.textContent = 'Tap any button to keep the screen on';
     }
   }
 
