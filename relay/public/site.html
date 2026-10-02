@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0d12">
+  <title>rclicker — your phone is the PowerPoint clicker</title>
+  <meta name="description" content="Control PowerPoint from your phone. No app to install, works on office and guest Wi-Fi or mobile data, end-to-end encrypted. Free for Windows.">
+  <meta property="og:title" content="rclicker — your phone is the PowerPoint clicker">
+  <meta property="og:description" content="Scan a QR code and your phone moves the slides. No app, no shared Wi-Fi, end-to-end encrypted.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="site.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▶</span> rclicker</a>
+    <nav aria-label="Page">
+      <a href="#how">How it works</a>
+      <a href="#security">Security</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-cta" href="download">Download</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Free for Windows · No phone app</p>
+        <h1>Your phone is the<br><span class="accent">PowerPoint clicker.</span></h1>
+        <p class="lead">Run rclicker on the presentation computer, scan the QR code, and move your slides from your phone. It works on office, school and guest Wi-Fi, even when your phone is on mobile data.</p>
+        <div class="cta-row">
+          <a class="button primary" href="download">Download for Windows</a>
+          <a class="button ghost" href="#how">See how it works</a>
+        </div>
+        <p class="fine">Windows 10 or 11 · PowerPoint · iPhone or Android</p>
+      </div>
+
+      <div class="hero-art" aria-hidden="true">
+        <div class="phone">
+          <div class="phone-status"><span class="dot"></span>Connected</div>
+          <div class="phone-next">NEXT <span>▶</span></div>
+          <div class="phone-prev"><span>◀</span> PREVIOUS</div>
+          <div class="phone-row"><span>START</span><span>BLACK</span><span>END</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="strip" aria-label="Highlights">
+      <div><strong>No app</strong><span>Opens in the phone's browser</span></div>
+      <div><strong>Any network</strong><span>Phone and PC don't need the same Wi-Fi</span></div>
+      <div><strong>Encrypted</strong><span>End to end, every tap</span></div>
+      <div><strong>Instant</strong><span>About a tenth of a second per tap</span></div>
+    </section>
+
+    <section id="how" class="section">
+      <h2>Three steps. No setup.</h2>
+      <ol class="steps">
+        <li>
+          <span class="step-num">1</span>
+          <h3>Start rclicker</h3>
+          <p>Double-click <code>rclicker.exe</code> on the presentation computer. Nothing to install, no account.</p>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <h3>Scan the QR code</h3>
+          <p>Point your phone's camera at the code in the rclicker window and open the link.</p>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <h3>Present</h3>
+          <p>Click on PowerPoint once, then use <b>Next</b>, <b>Previous</b>, <b>Start</b>, <b>Black</b> and <b>End</b> on your phone.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section split">
+      <div>
+        <h2>Built for real meeting rooms</h2>
+        <p>Most phone remotes need your phone and laptop on the same Wi-Fi. That rarely works at the office, a client site, a university or a conference: guest networks keep devices apart.</p>
+        <p>rclicker doesn't care. The computer and the phone each connect <em>out</em> to a small relay, the same way a web page loads. So it works where other remotes don't.</p>
+      </div>
+      <ul class="checks">
+        <li>Phone on mobile data, computer on corporate Wi-Fi</li>
+        <li>No firewall prompts, no ports to open</li>
+        <li>Works through company web proxies</li>
+        <li>Screens stay awake while you present</li>
+        <li>Reconnects by itself if your phone locks</li>
+        <li>One phone in control. Nobody in the audience can take over.</li>
+      </ul>
+    </section>
+
+    <section id="security" class="section">
+      <h2>Secure by design</h2>
+      <div class="cards">
+        <article>
+          <h3>End-to-end encrypted</h3>
+          <p>Every command is encrypted on your phone and only unlocked by your computer (AES-256). The relay in the middle passes it along but can't read it or fake it.</p>
+        </article>
+        <article>
+          <h3>The key never leaves your devices</h3>
+          <p>Each session has a random 256-bit key inside the QR code. It's never sent to any server and is never saved. Close the app and the code stops working.</p>
+        </article>
+        <article>
+          <h3>Can only move slides</h3>
+          <p>The phone can send five commands and nothing else. It can't type, press other keys or run anything on your computer.</p>
+        </article>
+        <article>
+          <h3>Only when PowerPoint is in front</h3>
+          <p>By default rclicker only acts while PowerPoint is the active window, so a stray tap never lands in your email.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="faq" class="section faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Does it cost anything?</summary>
+        <p>No. rclicker is free.</p>
+      </details>
+      <details>
+        <summary>Do I need to install an app on my phone?</summary>
+        <p>No. Scanning the QR code opens the remote in Safari or Chrome. Nothing to install, no sign-in.</p>
+      </details>
+      <details>
+        <summary>Does my phone need to be on the same Wi-Fi as the computer?</summary>
+        <p>No. Both just need internet. The phone can use mobile data while the computer is on any network.</p>
+      </details>
+      <details>
+        <summary>Windows says it protected my PC. Is that normal?</summary>
+        <p>Yes, for now. rclicker is new and not yet code-signed, so Windows asks before running it. Click <b>More info → Run anyway</b>. If your browser blocks the download, open your downloads list and choose <b>Keep</b>.</p>
+      </details>
+      <details>
+        <summary>My company network blocks it. What should I ask IT?</summary>
+        <p>Ask them to allow HTTPS and WebSocket connections to <code>rotmanav.ca/clicker</code> (port 443). Nothing needs to connect into your computer.</p>
+      </details>
+      <details>
+        <summary>Can someone in the audience take control?</summary>
+        <p>Only one phone can control a session. Others see "Another phone is in control". The QR code hides itself once your phone connects, and <b>New session</b> instantly makes the old code useless.</p>
+      </details>
+      <details>
+        <summary>Does it work with Google Slides or PDFs?</summary>
+        <p>It's made for PowerPoint. You can untick "Only send keys when PowerPoint is the active window" to use it with other apps that move with the arrow keys.</p>
+      </details>
+    </section>
+
+    <section class="final">
+      <h2>Ready for your next talk?</h2>
+      <a class="button primary" href="download">Download rclicker for Windows</a>
+      <p class="fine">Free · About 55 MB · Windows 10 or 11</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>rclicker · <a href="https://rotmanav.ca">rotmanav.ca</a> · <a href="https://github.com/camster91/Rclicker">Source on GitHub</a></p>
+  </footer>
+</body>
+</html>

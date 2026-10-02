@@ -38,12 +38,12 @@ public static class RelayUrls
         return true;
     }
 
-    /// <summary>The QR code URL. The key is in the #fragment, which browsers never send to the server.</summary>
+    /// <summary>The QR code URL: the phone remote page, with the key in the #fragment (never sent to the server).</summary>
     public static Uri PhoneUrl(Uri relay, string sessionToken)
     {
         ArgumentNullException.ThrowIfNull(relay);
         ArgumentException.ThrowIfNullOrEmpty(sessionToken);
-        return new Uri(relay, "#k=" + sessionToken);
+        return new Uri(relay, "remote#k=" + sessionToken);
     }
 
     /// <summary>wss:// (or ws:// for local development) address of the PC's relay socket.</summary>

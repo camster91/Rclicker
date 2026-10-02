@@ -3,6 +3,12 @@
   "name": "rclicker",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-15",
+  // Served at rotmanav.ca/clicker (the Worker strips the /clicker prefix) and on workers.dev.
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "rotmanav.ca/clicker*", "zone_name": "rotmanav.ca" },
+    { "pattern": "www.rotmanav.ca/clicker*", "zone_name": "rotmanav.ca" }
+  ],
   // The phone page (public/) is bundled into the Worker as text, so a deploy is one upload.
   "rules": [{ "type": "Text", "globs": ["**/*.html", "**/*.css", "**/*.txt"], "fallthrough": false }],
   "durable_objects": {

@@ -35,9 +35,19 @@ public class RelayUrlsTests
 
         var url = RelayUrls.PhoneUrl(relay, token);
 
-        Assert.Equal($"https://rclicker.example.workers.dev/#k={token}", url.ToString());
+        Assert.Equal($"https://rclicker.example.workers.dev/remote#k={token}", url.ToString());
         Assert.Equal(string.Empty, url.Query);
-        Assert.Equal("/", url.AbsolutePath);
+        Assert.Equal("/remote", url.AbsolutePath);
+    }
+
+    [Fact]
+    public void Urls_WorkWhenTheRelayLivesUnderAPath()
+    {
+        var token = SessionToken.Generate();
+        Assert.True(RelayUrls.TryParse("https://rotmanav.ca/clicker", out var relay));
+
+        Assert.Equal($"https://rotmanav.ca/clicker/remote#k={token}", RelayUrls.PhoneUrl(relay, token).ToString());
+        Assert.Equal("wss://rotmanav.ca/clicker/ws/host?room=abc", RelayUrls.HostSocketUrl(relay, "abc").ToString());
     }
 
     [Fact]

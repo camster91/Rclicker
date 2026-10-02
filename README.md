@@ -14,7 +14,7 @@ Phone (mobile data or any Wi-Fi)  ──HTTPS──▶  rclicker relay (Cloudfla
 
 Both the phone and the PC make **outgoing** HTTPS connections (port 443) to a small relay on Cloudflare. Nothing connects *into* the PC, so there's no firewall prompt and no need for the two devices to share a network. Commands are **end-to-end encrypted**: the relay passes them along but can't read or fake them.
 
-Relay in use: `https://rclicker.cameron-rotman.workers.dev` (built into the app).
+Website and relay: **https://rotmanav.ca/clicker** (built into the app). Download: **https://rotmanav.ca/clicker/download**. The original address `https://rclicker.cameron-rotman.workers.dev` keeps working.
 
 ## How to run
 
@@ -58,7 +58,7 @@ rclicker.exe [--relay https://<relay address>] [--console]
 
 - Windows 10 (1809) or later, or Windows 11. x64 (an ARM64 build is also produced).
 - Microsoft PowerPoint (desktop app).
-- **Internet access on the PC.** Outgoing HTTPS to `rclicker.cameron-rotman.workers.dev` must be allowed.
+- **Internet access on the PC.** Outgoing HTTPS to `rotmanav.ca` must be allowed.
 - A phone with a modern browser (iPhone Safari, Android Chrome) and any internet connection.
 - Nothing else to install. The `.exe` contains the .NET runtime.
 
@@ -72,15 +72,15 @@ rclicker is built to get through typical corporate networks:
 
 What IT may need to allow:
 
-- `https://rclicker.cameron-rotman.workers.dev` (some filters block `*.workers.dev` by category).
+- `https://rotmanav.ca/clicker`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
 - Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Version 0.2.x is **not code-signed** yet.
 
-If IT can only allow a company-owned domain, the relay can run on a custom domain such as `rclicker.yourcompany.com` (see [Running your own relay](#running-your-own-relay)).
+If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
 ## Security
 
-- Each session has a **random 256-bit key**. It's in the QR code after the `#`, which browsers never send to any server, so the relay never sees it.
+- Each session has a **random 256-bit key**. It's in the QR code link (`…/clicker/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
 - From that key, the phone and the PC derive an **encryption key** (AES-256-GCM) that only they have. Every command and reply is encrypted. Commands also carry a one-time challenge and a counter, so recorded messages can't be replayed.
 - The relay only gets a room number and a **hash** of a phone pass, so it can tell which phone may join without being able to join itself.
 - Only **one phone controls at a time**. A second phone is told "Another phone is in control".

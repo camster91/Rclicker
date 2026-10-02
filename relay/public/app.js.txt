@@ -114,7 +114,9 @@
 
     setState(everConnected ? 'reconnecting' : 'connecting');
     var scheme = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    var url = scheme + window.location.host + '/ws/phone?room=' + encodeURIComponent(keys.room);
+    // The relay may live under a path (e.g. /clicker/remote), so build the socket URL next to this page.
+    var base = window.location.pathname.replace(/[^/]*$/, '');
+    var url = scheme + window.location.host + base + 'ws/phone?room=' + encodeURIComponent(keys.room);
 
     var socket;
     try {

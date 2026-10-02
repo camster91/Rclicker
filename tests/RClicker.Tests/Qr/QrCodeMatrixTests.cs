@@ -55,11 +55,21 @@ public class QrCodeMatrixTests
         Assert.Contains(sessions.Current.Token, after, StringComparison.Ordinal);
     }
 
-    private static string PhoneUrl(string token)
+    // The two real relay addresses; the longer one decides the QR size.
+    private static string PhoneUrl(string token, string relayAddress = "https://rclicker.cameron-rotman.workers.dev")
     {
-        // A realistically long relay host name.
-        Assert.True(RelayUrls.TryParse("https://rclicker.presentation-team-account.workers.dev", out var relay));
+        Assert.True(RelayUrls.TryParse(relayAddress, out var relay));
         return RelayUrls.PhoneUrl(relay, token).ToString();
+    }
+
+    [Fact]
+    public void QrCode_ForRotmanavAddress_IsSmallAndDecodes()
+    {
+        var url = PhoneUrl(SessionToken.Generate(), "https://rotmanav.ca/clicker");
+        var matrix = QrCodeMatrix.Create(url);
+
+        Assert.Equal(url, Decode(matrix));
+        Assert.True(matrix.GetLength(0) <= 37 + (2 * QrCodeMatrix.QuietZoneModules), $"QR is {matrix.GetLength(0)} modules"); // version 5
     }
 
     private static string Decode(bool[,] matrix, int scale = 6)

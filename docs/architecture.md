@@ -25,6 +25,17 @@ rclicker 0.2 has three parts: the Windows app, a small relay on Cloudflare, and 
                                               └──────────────────────┘
 ```
 
+## Where it runs
+
+The Cloudflare Worker `rclicker` is mounted at **https://rotmanav.ca/clicker** (zone routes `rotmanav.ca/clicker*` and `www.rotmanav.ca/clicker*`) and at **https://rclicker.cameron-rotman.workers.dev**. It strips the `/clicker` prefix, so both addresses behave the same:
+
+| Path | What |
+| --- | --- |
+| `/` | Marketing page (`public/site.html`). Old QR links with `#k=` are forwarded to `/remote`. |
+| `/remote` | Phone remote (`public/remote.html`, `app.js`, `styles.css`) |
+| `/download` | 302 to the latest GitHub release `rclicker.exe` |
+| `/ws/host`, `/ws/phone` | Relay WebSockets → Durable Object `Room` |
+
 ## Components
 
 | Part | Where | What it does |
