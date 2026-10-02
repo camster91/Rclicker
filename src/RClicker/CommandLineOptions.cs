@@ -2,32 +2,29 @@ namespace RClicker;
 
 /// <summary>
 /// Optional switches:
-///   --port &lt;n&gt;   use a specific port (no automatic fallback)
-///   --console     open a console window with diagnostic logs
+///   --relay &lt;url&gt;   use a different relay (default: the one built into this copy)
+///   --console       open a console window with diagnostic logs
 /// </summary>
-internal sealed record CommandLineOptions(int? Port, bool ShowConsole)
+internal sealed record CommandLineOptions(string? Relay, bool ShowConsole)
 {
-    public const string Usage = "Usage: rclicker.exe [--port <1024-65535>] [--console]";
+    public const string Usage = "Usage: rclicker.exe [--relay https://<relay address>] [--console]";
 
     public static CommandLineOptions Parse(IReadOnlyList<string> args)
     {
-        int? port = null;
+        string? relay = null;
         bool console = false;
 
         for (int i = 0; i < args.Count; i++)
         {
             switch (args[i].ToLowerInvariant())
             {
-                case "--port":
-                case "-p":
-                    if (i + 1 >= args.Count
-                        || !int.TryParse(args[++i], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value)
-                        || value is < 1024 or > 65535)
+                case "--relay":
+                    if (i + 1 >= args.Count)
                     {
-                        throw new ArgumentException("--port needs a number between 1024 and 65535.");
+                        throw new ArgumentException("--relay needs an address, e.g. https://rclicker.example.workers.dev");
                     }
 
-                    port = value;
+                    relay = args[++i];
                     break;
 
                 case "--console":
@@ -39,6 +36,6 @@ internal sealed record CommandLineOptions(int? Port, bool ShowConsole)
             }
         }
 
-        return new CommandLineOptions(port, console);
+        return new CommandLineOptions(relay, console);
     }
 }

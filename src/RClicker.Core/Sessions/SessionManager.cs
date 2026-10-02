@@ -1,8 +1,8 @@
 namespace RClicker.Sessions;
 
 /// <summary>
-/// Owns the single current session. Regenerating replaces the token, which instantly
-/// invalidates the previous one (old tokens are not remembered anywhere).
+/// Owns the single current session. Regenerating replaces the key; the PC then ends the old
+/// relay room, so old QR codes stop working (old keys are not remembered anywhere).
 /// </summary>
 public sealed class SessionManager
 {
@@ -72,24 +72,6 @@ public sealed class SessionManager
 
         Regenerate();
         return true;
-    }
-
-    public SessionValidationResult Validate(string? token)
-    {
-        if (string.IsNullOrEmpty(token))
-        {
-            return SessionValidationResult.Missing;
-        }
-
-        var current = Current;
-
-        // Cheap shape check first; the real check is constant time.
-        if (!SessionToken.IsWellFormed(token) || !SessionToken.FixedTimeEquals(current.Token, token))
-        {
-            return SessionValidationResult.Invalid;
-        }
-
-        return IsExpired(current) ? SessionValidationResult.Expired : SessionValidationResult.Valid;
     }
 
     private RemoteSession Create(int generation)

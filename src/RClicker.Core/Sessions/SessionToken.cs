@@ -4,7 +4,8 @@ using System.Security.Cryptography;
 namespace RClicker.Sessions;
 
 /// <summary>
-/// Creates and handles the secret that is embedded in the QR code URL.
+/// Creates and handles the session key that is embedded in the QR code URL (in the #fragment,
+/// so it never reaches any server).
 /// </summary>
 public static class SessionToken
 {
@@ -40,20 +41,6 @@ public static class SessionToken
         }
 
         return true;
-    }
-
-    /// <summary>Constant-time comparison so response timing does not leak how much of a guess was right.</summary>
-    public static bool FixedTimeEquals(string expected, string? candidate)
-    {
-        ArgumentNullException.ThrowIfNull(expected);
-        if (candidate is null)
-        {
-            return false;
-        }
-
-        var expectedBytes = System.Text.Encoding.UTF8.GetBytes(expected);
-        var candidateBytes = System.Text.Encoding.UTF8.GetBytes(candidate);
-        return CryptographicOperations.FixedTimeEquals(expectedBytes, candidateBytes);
     }
 
     /// <summary>Safe form for logs and UI diagnostics. Never log the full token.</summary>
