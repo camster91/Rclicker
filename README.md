@@ -14,7 +14,9 @@ Phone (mobile data or any Wi-Fi)  ──HTTPS──▶  rclicker relay (Cloudfla
 
 Both the phone and the PC make **outgoing** HTTPS connections (port 443) to a small relay on Cloudflare. Nothing connects *into* the PC, so there's no firewall prompt and no need for the two devices to share a network. Commands are **end-to-end encrypted**: the relay passes them along but can't read or fake them.
 
-Website and relay: **https://clicker.rotmanav.ca** (built into the app). Download: **https://clicker.rotmanav.ca/download**. The older addresses (`rotmanav.ca/clicker`, `rclicker.cameron-rotman.workers.dev`) redirect there, and apps already installed keep connecting through them.
+**Download: [rclicker.exe](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe)** (latest release, Windows 10/11). All releases: https://github.com/camster91/Rclicker/releases
+
+Website and relay: **https://clicker.rotmanav.ca** (built into the app; `/download` there points to the same file). The older addresses (`rotmanav.ca/clicker`, `rclicker.cameron-rotman.workers.dev`) redirect there, and apps already installed keep connecting through them.
 
 ## How to run
 
