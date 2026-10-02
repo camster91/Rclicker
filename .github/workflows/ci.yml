@@ -102,3 +102,7 @@ jobs:
               --target "$GITHUB_SHA" --title "rclicker $version" $flags \
               --notes "Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). Not code-signed yet: if Windows warns, choose More info → Run anyway."
           fi
+          # Builds from main become the "latest" release that rotmanav.ca/clicker/download serves.
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            gh release edit "$tag" --prerelease=false --latest
+          fi

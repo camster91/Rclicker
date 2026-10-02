@@ -88,24 +88,56 @@ const IV = 'AAAAAAAAAAAAAAAA';
 const CT = 'Y2lwaGVydGV4dC1nb2VzLWhlcmUtYW5kLXRhZw';
 
 describe('routing', () => {
-  it('serves the phone page with security headers', async () => {
-    const response = await SELF.fetch('https://relay.test/');
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain('data-command="presentation.next"');
-    expect(response.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
-    expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+  it('serves the marketing page and the phone remote with security headers', async () => {
+    const site = await SELF.fetch('https://relay.test/');
+    expect(site.status).toBe(200);
+    expect(await site.text()).toContain('Download for Windows');
+    expect(site.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
+
+    const remote = await SELF.fetch('https://relay.test/remote');
+    expect(remote.status).toBe(200);
+    expect(await remote.text()).toContain('data-command="presentation.next"');
+    expect(remote.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
+    expect(remote.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(remote.headers.get('Cache-Control')).toBe('no-store');
   });
 
-  it('serves only the whitelisted phone files', async () => {
-    for (const [path, type] of [['/app.js', 'text/javascript'], ['/styles.css', 'text/css'], ['/index.html', 'text/html']]) {
+  it('serves only whitelisted files', async () => {
+    const files: [string, string][] = [['/app.js', 'text/javascript'], ['/styles.css', 'text/css'], ['/site.css', 'text/css'], ['/site.js', 'text/javascript']];
+    for (const [path, type] of files) {
       const response = await SELF.fetch(`https://relay.test${path}`);
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toContain(type);
     }
-    for (const path of ['/app.js.txt', '/src/room.ts', '/wrangler.jsonc', '/..%2fwrangler.jsonc', '/APP.JS']) {
+    for (const path of ['/app.js.txt', '/index.html', '/src/room.ts', '/wrangler.jsonc', '/..%2fwrangler.jsonc', '/APP.JS', '/clickerx/remote']) {
       expect((await SELF.fetch(`https://relay.test${path}`)).status).toBe(404);
     }
     expect((await SELF.fetch('https://relay.test/', { method: 'POST' })).status).toBe(405);
+  });
+
+  it('redirects Download to the latest release', async () => {
+    const response = await SELF.fetch('https://relay.test/download', { redirect: 'manual' });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe');
+  });
+
+  it('works the same under /clicker (rotmanav.ca/clicker)', async () => {
+    const bare = await SELF.fetch('https://rotmanav.test/clicker', { redirect: 'manual' });
+    expect(bare.status).toBe(301);
+    expect(bare.headers.get('Location')).toBe('/clicker/');
+    expect(await (await SELF.fetch('https://rotmanav.test/clicker/')).text()).toContain('Download for Windows');
+    expect(await (await SELF.fetch('https://rotmanav.test/clicker/remote')).text()).toContain('data-command');
+    expect((await SELF.fetch('https://rotmanav.test/clicker/app.js')).status).toBe(200);
+
+    // Pairing through the prefixed socket paths.
+    const r = await newRoom();
+    const pc = await open(`/clicker/ws/host?room=${r.room}`);
+    pc.send({ t: 'claim', v: 1, hostKey: r.hostKey, phoneAuthHash: r.phoneAuthHash });
+    expect(await pc.next()).toEqual({ t: 'ready' });
+    const p = await open(`/clicker/ws/phone?room=${r.room}`, { 'User-Agent': IPHONE_UA });
+    p.send({ t: 'auth', token: r.phoneToken, client: 'client-prefix' });
+    expect(await p.next()).toEqual({ t: 'host', online: true });
+    expect(await pc.next()).toMatchObject({ t: 'phone', event: 'join', label: 'iPhone' });
   });
 
   it('rejects non-WebSocket requests, bad room ids and other origins', async () => {

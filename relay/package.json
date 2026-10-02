@@ -1,6 +1,6 @@
 {
   "name": "rclicker-relay",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "rclicker cloud relay: pairs one PC with one phone and forwards end-to-end encrypted commands.",
   "type": "module",

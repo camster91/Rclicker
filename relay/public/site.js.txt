@@ -1,0 +1,8 @@
+// Old QR codes pointed at the site root with the session key in the #fragment.
+// Send those visitors straight to the phone remote (the key stays in the fragment).
+(function () {
+  'use strict';
+  if (/(^#|&)k=/.test(window.location.hash)) {
+    window.location.replace('remote' + window.location.hash);
+  }
+})();

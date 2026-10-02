@@ -41,6 +41,15 @@ internal static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool AllocConsole();
 
+    internal const uint ES_SYSTEM_REQUIRED = 0x00000001;
+    internal const uint ES_DISPLAY_REQUIRED = 0x00000002;
+    internal const uint ES_CONTINUOUS = 0x80000000;
+
+    /// <summary>Keeps the display and system awake (or releases that) for the calling thread.</summary>
+    [LibraryImport("kernel32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    internal static partial uint SetThreadExecutionState(uint esFlags);
+
     // INPUT must be the full Win32 size (40 bytes on 64-bit, 28 on 32-bit) or SendInput
     // rejects it, so the union includes MOUSEINPUT, its largest member.
     [StructLayout(LayoutKind.Sequential)]
