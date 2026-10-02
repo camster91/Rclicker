@@ -69,3 +69,36 @@ jobs:
       - name: Bundle (dry run)
         run: npx wrangler deploy --dry-run --outdir dist
 
+
+  # Publishes the built rclicker.exe as a GitHub Release (direct download, no sign-in).
+  # main → release; claude/* branches → pre-release. Re-runs replace the files.
+  release:
+    needs: [build, relay]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rclicker-win-x64
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)
+          tag="v$version"
+          (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
+          flags=""
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then flags="--prerelease"; fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
+          else
+            gh release create "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip \
+              --target "$GITHUB_SHA" --title "rclicker $version" $flags \
+              --notes "Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). Not code-signed yet: if Windows warns, choose More info → Run anyway."
+          fi
