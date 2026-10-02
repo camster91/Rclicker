@@ -27,7 +27,9 @@ rclicker 0.2 has three parts: the Windows app, a small relay on Cloudflare, and 
 
 ## Where it runs
 
-The Cloudflare Worker `rclicker` is mounted at **https://rotmanav.ca/clicker** (zone routes `rotmanav.ca/clicker*` and `www.rotmanav.ca/clicker*`) and at **https://rclicker.cameron-rotman.workers.dev**. It strips the `/clicker` prefix, so both addresses behave the same:
+The Cloudflare Worker `rclicker` lives at **https://clicker.rotmanav.ca** (a Workers custom domain), its own origin. The older addresses still reach the same Worker: **rotmanav.ca/clicker** (zone routes `rotmanav.ca/clicker*` and `www.rotmanav.ca/clicker*`) and **rclicker.cameron-rotman.workers.dev**. There, `/ws/host` and `/ws/phone` keep working for apps already installed, and every page redirects (301) to the same path on `clicker.rotmanav.ca`, keeping the `#k=` key.
+
+On `clicker.rotmanav.ca`:
 
 | Path | What |
 | --- | --- |
