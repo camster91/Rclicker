@@ -1,0 +1,26 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,props,csproj,sln}]
+indent_size = 2
+
+[*.{html,css,js}]
+indent_size = 2
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+# Library code: no SynchronizationContext to capture in the server, keep the noise down.
+dotnet_diagnostic.CA2007.severity = none
+# Logging message templates are fine for this small app.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+# Next()/End() are the natural names for presentation actions; VB.NET keyword clashes don't matter here.
+dotnet_diagnostic.CA1716.severity = none
