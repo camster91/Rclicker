@@ -104,7 +104,7 @@ jobs:
 
 
   # Publishes the built rclicker.exe as a GitHub Release (direct download, no sign-in).
-  # main → release; claude/* branches → pre-release. Re-runs replace the files.
+  # main → release vX.Y.Z (latest); claude/* branches → pre-release vX.Y.Z-preview. Re-runs replace the files.
   release:
     needs: [build, relay]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
@@ -124,10 +124,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)
-          tag="v$version"
+          # Only main publishes the real release; other branches get a separate preview
+          # pre-release so unmerged code never replaces what /download serves.
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            tag="v$version"; flags=""
+          else
+            tag="v$version-preview"; flags="--prerelease"
+          fi
           (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
-          flags=""
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then flags="--prerelease"; fi
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
           else
