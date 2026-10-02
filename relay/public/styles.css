@@ -90,7 +90,8 @@ h1 {
 .status[data-state="connected"] { color: var(--ok); border-color: var(--ok); }
 .status[data-state="connected"] .status-dot { background: currentColor; }
 .status[data-state="connecting"],
-.status[data-state="reconnecting"] { color: var(--warn); border-color: var(--warn); }
+.status[data-state="reconnecting"],
+.status[data-state="waiting"] { color: var(--warn); border-color: var(--warn); }
 .status[data-state="connecting"] .status-dot,
 .status[data-state="reconnecting"] .status-dot { border-style: dashed; animation: spin 1.2s linear infinite; }
 .status[data-state="ended"],

@@ -1,21 +1,30 @@
 // rclicker — phone controller.
-// Sends only whitelisted semantic commands ("presentation.next", ...) over a WebSocket.
+//
+// The QR code opens https://<relay>/#k=<key>. The key stays in the URL fragment, which
+// browsers never send to the server. From it we derive (HMAC-SHA-256):
+//   room id      which relay room to join (not secret)
+//   phone token  proves to the relay we scanned this QR code (relay only stores its hash)
+//   AES key      end-to-end encryption with the PC; the relay cannot read or forge commands
+// Only whitelisted semantic commands ("presentation.next", ...) are ever sent.
 (function () {
   'use strict';
 
   var TAP_LOCK_MS = 300;        // Ignore a second tap on the same button within this window.
-  var ACK_TIMEOUT_MS = 2500;    // No reply this long after a command => connection is probably dead.
-  var PING_EVERY_MS = 15000;    // App-level heartbeat while the page is visible.
-  var PONG_TIMEOUT_MS = 4000;
-  var MAX_BACKOFF_MS = 5000;
+  var ACK_TIMEOUT_MS = 4000;    // No reply this long after a command => connection is probably dead.
+  var PING_EVERY_MS = 15000;    // Keep-alive while the page is visible.
+  var PONG_TIMEOUT_MS = 5000;
+  var MAX_BACKOFF_MS = 8000;
   var MESSAGE_MS = 4000;
+
+  var PING = '{"t":"ping"}';    // Must match the relay's auto-response text exactly.
 
   var CLOSE_SESSION_ENDED = 4401;
   var CLOSE_REPLACED = 4408;
   var CLOSE_BUSY = 4409;
-  var CLOSE_SHUTDOWN = 4410;
+  var CLOSE_RECEIVER_CLOSED = 4410;
 
-  var token = new URLSearchParams(window.location.search).get('session');
+  var encoder = new TextEncoder();
+  var decoder = new TextDecoder();
   var clientId = getClientId();
 
   var statusEl = document.getElementById('status');
@@ -27,10 +36,13 @@
   var overlayRetry = document.getElementById('overlay-retry');
   var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-command]'));
 
+  var keys = null;            // { room, phoneToken, aesKey }
   var ws = null;
   var state = 'connecting';
   var stopped = false;        // True once the session is over; no more reconnects.
   var everConnected = false;
+  var hostOnline = false;
+  var nonce = null;           // Per-connection challenge from the PC; proves our commands are fresh.
   var attempt = 0;
   var nextId = 1;
   var reconnectTimer = null;
@@ -39,6 +51,57 @@
   var ackTimers = {};
   var lastTap = {};
   var messageTimer = null;
+  var wakeLock = null;
+
+  // ---------- crypto ----------
+
+  function fromBase64Url(text) {
+    var b64 = text.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) { b64 += '='; }
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+    return bytes;
+  }
+
+  function toBase64Url(bytes) {
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) { binary += String.fromCharCode(bytes[i]); }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function deriveKeys(keyBytes) {
+    var subtle = window.crypto.subtle;
+    return subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']).then(function (hmac) {
+      function mac(label) {
+        return subtle.sign('HMAC', hmac, encoder.encode(label)).then(function (b) { return new Uint8Array(b); });
+      }
+      return Promise.all([mac('rclicker/v1/room'), mac('rclicker/v1/phone'), mac('rclicker/v1/enc')]);
+    }).then(function (macs) {
+      return subtle.importKey('raw', macs[2], { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']).then(function (aesKey) {
+        return { room: toBase64Url(macs[0].slice(0, 16)), phoneToken: toBase64Url(macs[1]), aesKey: aesKey };
+      });
+    });
+  }
+
+  function encrypt(payload) {
+    var iv = window.crypto.getRandomValues(new Uint8Array(12));
+    return window.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv, additionalData: encoder.encode('rclicker/v1/p2h/' + keys.room) },
+      keys.aesKey,
+      encoder.encode(JSON.stringify(payload))
+    ).then(function (ct) {
+      return JSON.stringify({ t: 'msg', iv: toBase64Url(iv), ct: toBase64Url(new Uint8Array(ct)) });
+    });
+  }
+
+  function decrypt(iv, ct) {
+    return window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64Url(iv), additionalData: encoder.encode('rclicker/v1/h2p/' + keys.room) },
+      keys.aesKey,
+      fromBase64Url(ct)
+    ).then(function (plain) { return JSON.parse(decoder.decode(plain)); });
+  }
 
   // ---------- connection ----------
 
@@ -50,8 +113,7 @@
 
     setState(everConnected ? 'reconnecting' : 'connecting');
     var scheme = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    var url = scheme + window.location.host + '/ws?session=' + encodeURIComponent(token) +
-      '&client=' + encodeURIComponent(clientId);
+    var url = scheme + window.location.host + '/ws/phone?room=' + encodeURIComponent(keys.room);
 
     var socket;
     try {
@@ -61,21 +123,19 @@
       return;
     }
 
-    var opened = false;
     ws = socket;
+    nonce = null;
 
     socket.onopen = function () {
       if (ws !== socket) { return; }
-      opened = true;
       attempt = 0;
-      everConnected = true;
-      setState('connected');
+      socket.send(JSON.stringify({ t: 'auth', token: keys.phoneToken, client: clientId }));
       startHeartbeat();
     };
 
     socket.onmessage = function (event) {
       if (ws !== socket) { return; }
-      handleMessage(event.data);
+      handleRelayMessage(event.data);
     };
 
     socket.onerror = function () { /* onclose follows */ };
@@ -83,20 +143,21 @@
     socket.onclose = function (event) {
       if (ws !== socket) { return; }
       ws = null;
+      nonce = null;
       stopHeartbeat();
       clearAckTimers();
-      handleClose(event.code, opened);
+      handleClose(event.code);
     };
   }
 
-  function handleClose(code, opened) {
+  function handleClose(code) {
     switch (code) {
       case CLOSE_SESSION_ENDED:
         return endSession('Session ended',
-          'This QR code is no longer valid. Scan the new QR code shown on the computer.');
-      case CLOSE_SHUTDOWN:
+          'This QR code is no longer valid. Scan the QR code shown in rclicker on the computer.');
+      case CLOSE_RECEIVER_CLOSED:
         return endSession('rclicker closed',
-          'The app was closed on the computer. Start it again and scan the new QR code.');
+          'rclicker was closed on the computer. Start it again and scan the new QR code.');
       case CLOSE_BUSY:
         return pause('Another phone is in control',
           'Only one phone can control the presentation at a time. Ask the presenter to close the remote on their phone, then try again.');
@@ -104,36 +165,7 @@
         return pause('Opened somewhere else',
           'The remote was opened in another tab or window on this device. Use that one, or tap below to use this one instead.');
     }
-
-    if (!opened) {
-      // The handshake failed. Browsers hide the HTTP status, so ask whether the
-      // session is still valid before retrying (401 = it is over, stop trying).
-      checkSession();
-    } else {
-      scheduleReconnect();
-    }
-  }
-
-  function checkSession() {
-    setState(everConnected ? 'reconnecting' : 'connecting');
-    var controller = typeof AbortController === 'function' ? new AbortController() : null;
-    var timeout = setTimeout(function () { if (controller) { controller.abort(); } }, 4000);
-    fetch('/api/session', {
-      headers: { 'X-Session-Token': token },
-      cache: 'no-store',
-      signal: controller ? controller.signal : undefined
-    }).then(function (response) {
-      clearTimeout(timeout);
-      if (response.status === 401) {
-        endSession('Session ended',
-          'This QR code is no longer valid. Scan the QR code shown in rclicker on the computer.');
-      } else {
-        scheduleReconnect();
-      }
-    }).catch(function () {
-      clearTimeout(timeout);
-      scheduleReconnect();
-    });
+    scheduleReconnect();
   }
 
   function scheduleReconnect() {
@@ -141,8 +173,8 @@
     setState(everConnected ? 'reconnecting' : 'connecting');
     var delay = Math.min(MAX_BACKOFF_MS, 400 * Math.pow(2, attempt));
     attempt += 1;
-    if (attempt > 6) {
-      showMessage("Can't reach the computer. Check that the phone and computer are on the same Wi-Fi.", true);
+    if (attempt > 5) {
+      showMessage("Can't reach the internet. Check the phone's mobile data or Wi-Fi.", true);
     }
     reconnectTimer = setTimeout(function () {
       reconnectTimer = null;
@@ -154,6 +186,7 @@
   function dropAndReconnect() {
     var socket = ws;
     ws = null;
+    nonce = null;
     stopHeartbeat();
     clearAckTimers();
     if (socket) {
@@ -181,7 +214,7 @@
   function ping() {
     if (!ws || ws.readyState !== WebSocket.OPEN || pongTimer) { return; }
     try {
-      ws.send(JSON.stringify({ type: 'ping' }));
+      ws.send(PING);
     } catch (e) {
       dropAndReconnect();
       return;
@@ -194,22 +227,48 @@
 
   // ---------- messages ----------
 
-  function handleMessage(data) {
+  function handleRelayMessage(data) {
     var msg;
     try {
       msg = JSON.parse(data);
     } catch (e) {
       return;
     }
+    if (!msg || typeof msg.t !== 'string') { return; }
+
+    switch (msg.t) {
+      case 'pong':
+        clearTimeout(pongTimer);
+        pongTimer = null;
+        break;
+      case 'host':
+        hostOnline = !!msg.online;
+        if (!hostOnline) {
+          nonce = null;
+          clearAckTimers();
+        }
+        setState(hostOnline && nonce ? 'connected' : 'waiting');
+        break;
+      case 'msg':
+        if (typeof msg.iv !== 'string' || typeof msg.ct !== 'string') { return; }
+        decrypt(msg.iv, msg.ct).then(handleSecureMessage, function () {
+          // Not from our PC (or corrupted): ignore.
+        });
+        break;
+    }
+  }
+
+  function handleSecureMessage(msg) {
     if (!msg || typeof msg.type !== 'string') { return; }
 
     switch (msg.type) {
       case 'hello':
+        if (typeof msg.nonce !== 'string') { return; }
+        nonce = msg.nonce;
+        hostOnline = true;
+        everConnected = true;
         clearMessage();
-        break;
-      case 'pong':
-        clearTimeout(pongTimer);
-        pongTimer = null;
+        setState('connected');
         break;
       case 'ack':
         settle(msg.id);
@@ -249,36 +308,42 @@
     lastTap[command] = now;
 
     if (stopped) { return; }
-    if (!ws || ws.readyState !== WebSocket.OPEN || state !== 'connected') {
+    if (!ws || ws.readyState !== WebSocket.OPEN || state !== 'connected' || !nonce) {
       // Never queue: a command sent late would jump slides unexpectedly.
-      showMessage('Not connected — that tap was not sent.', true);
+      showMessage(state === 'waiting'
+        ? 'The computer is not connected — that tap was not sent.'
+        : 'Not connected — that tap was not sent.', true);
       return;
     }
 
     var id = nextId++;
-    try {
-      ws.send(JSON.stringify({ type: command, id: id }));
-    } catch (e) {
+    var socket = ws;
+    encrypt({ type: command, id: id, nonce: nonce }).then(function (frame) {
+      if (ws !== socket || socket.readyState !== WebSocket.OPEN) {
+        showMessage('Not connected — that tap was not sent.', true);
+        return;
+      }
+      socket.send(frame);
+      ackTimers[id] = setTimeout(function () {
+        delete ackTimers[id];
+        showMessage('No reply from the computer. Reconnecting… (tap again once connected)', true);
+        dropAndReconnect();
+      }, ACK_TIMEOUT_MS);
+    }).catch(function () {
       showMessage('Not connected — that tap was not sent.', true);
-      dropAndReconnect();
-      return;
-    }
+    });
 
     if (navigator.vibrate) {
       try { navigator.vibrate(12); } catch (e) { /* ignore */ }
     }
-
-    ackTimers[id] = setTimeout(function () {
-      delete ackTimers[id];
-      showMessage('No reply from the computer. Reconnecting… (tap again once connected)', true);
-      dropAndReconnect();
-    }, ACK_TIMEOUT_MS);
   }
 
   buttons.forEach(function (button) {
     button.addEventListener('click', function () {
       if (button.getAttribute('aria-disabled') === 'true') {
-        showMessage('Not connected — that tap was not sent.', true);
+        showMessage(state === 'waiting'
+          ? 'The computer is not connected — that tap was not sent.'
+          : 'Not connected — that tap was not sent.', true);
         return;
       }
       pressFeedback(button);
@@ -305,6 +370,7 @@
     statusEl.setAttribute('data-state', next);
     statusText.textContent = {
       connecting: 'Connecting…',
+      waiting: 'Waiting for computer…',
       connected: 'Connected',
       reconnecting: 'Reconnecting…',
       offline: 'Not connected',
@@ -312,6 +378,7 @@
     }[next] || next;
     var disabled = next !== 'connected';
     buttons.forEach(function (b) { b.setAttribute('aria-disabled', disabled ? 'true' : 'false'); });
+    updateWakeLock();
   }
 
   function endSession(title, text) {
@@ -368,10 +435,24 @@
     setTimeout(function () { button.classList.remove(cls); }, 300);
   }
 
+  // Keep the phone screen on while presenting (HTTPS lets us use the Wake Lock API).
+  function updateWakeLock() {
+    var want = state === 'connected' && document.visibilityState === 'visible';
+    if (want && !wakeLock && navigator.wakeLock) {
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLock = lock;
+        lock.addEventListener('release', function () { wakeLock = null; });
+      }).catch(function () { /* not allowed right now */ });
+    } else if (!want && wakeLock) {
+      wakeLock.release().catch(function () { /* ignore */ });
+      wakeLock = null;
+    }
+  }
+
   // ---------- lifecycle (lock screen, app switch, network changes) ----------
 
   function wake() {
-    if (stopped) { return; }
+    if (stopped || !keys) { return; }
     if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
       attempt = 0;
       clearTimeout(reconnectTimer);
@@ -381,10 +462,11 @@
       // The socket may look open after sleep but be dead. Prove it.
       ping();
     }
+    updateWakeLock();
   }
 
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') { wake(); }
+    if (document.visibilityState === 'visible') { wake(); } else { updateWakeLock(); }
   });
   window.addEventListener('pageshow', function (event) { if (event.persisted) { wake(); } });
   window.addEventListener('online', wake);
@@ -402,30 +484,32 @@
     var id = null;
     try { id = window.localStorage.getItem(key); } catch (e) { /* private mode */ }
     if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
-      id = randomId();
+      id = toBase64Url(window.crypto.getRandomValues(new Uint8Array(16)));
       try { window.localStorage.setItem(key, id); } catch (e) { /* ignore */ }
     }
     return id;
   }
 
-  function randomId() {
-    var bytes = new Uint8Array(16);
-    if (window.crypto && window.crypto.getRandomValues) {
-      window.crypto.getRandomValues(bytes);
-    } else {
-      for (var i = 0; i < bytes.length; i++) { bytes[i] = Math.floor(Math.random() * 256); }
-    }
-    return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
-  }
-
   // ---------- start ----------
 
-  if (!token) {
+  var keyText = new URLSearchParams(window.location.hash.slice(1)).get('k');
+  if (!keyText || !/^[A-Za-z0-9_-]{43}$/.test(keyText)) {
     endSession('Scan the QR code',
       'Open this page by scanning the QR code shown in rclicker on the computer.');
     return;
   }
 
+  if (!window.crypto || !window.crypto.subtle) {
+    endSession('Secure page needed',
+      'This browser cannot open a secure connection here. Make sure the address starts with https://.');
+    return;
+  }
+
   setState('connecting');
-  connect();
+  deriveKeys(fromBase64Url(keyText)).then(function (derived) {
+    keys = derived;
+    connect();
+  }).catch(function () {
+    endSession('Something went wrong', 'This browser could not set up encryption. Try Safari or Chrome.');
+  });
 })();

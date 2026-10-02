@@ -1,0 +1,20 @@
+{
+  "name": "rclicker-relay",
+  "version": "0.2.0",
+  "private": true,
+  "description": "rclicker cloud relay: pairs one PC with one phone and forwards end-to-end encrypted commands.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "wrangler types && tsc --noEmit",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "4.1.11",
+    "wrangler": "^4.147.0"
+  }
+}

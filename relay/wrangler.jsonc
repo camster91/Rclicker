@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rclicker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  // The phone page (public/) is bundled into the Worker as text, so a deploy is one upload.
+  "rules": [{ "type": "Text", "globs": ["**/*.html", "**/*.css", "**/*.txt"], "fallthrough": false }],
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  // SQLite-backed Durable Objects are available on the Workers Free plan.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+}
