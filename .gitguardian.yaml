@@ -1,0 +1,6 @@
+# Fixed, public crypto test vectors (key = bytes 0..31), not real secrets.
+version: 2
+secret:
+  ignored_paths:
+    - tests/RClicker.Tests/Relay/RelayCryptoTests.cs
+    - relay/test/relay.test.ts
