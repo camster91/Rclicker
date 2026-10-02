@@ -34,7 +34,7 @@
 
   <!-- Relay built into this copy. Override with: dotnet publish ... -p:RelayUrl=https://<your relay> -->
   <PropertyGroup>
-    <RelayUrl Condition="'$(RelayUrl)' == ''">https://rotmanav.ca/clicker/</RelayUrl>
+    <RelayUrl Condition="'$(RelayUrl)' == ''">https://clicker.rotmanav.ca/</RelayUrl>
   </PropertyGroup>
 
   <ItemGroup>

@@ -57,7 +57,7 @@ In https://github.com/camster91/Rclicker → **Settings → Secrets and variable
 | `AZURE_SIGNING_ACCOUNT` | e.g. `rclickersigning` |
 | `AZURE_SIGNING_PROFILE` | `rclicker` |
 
-That's it. The next build on `main` signs `rclicker.exe`, checks the signature, and publishes it to the release behind https://rotmanav.ca/clicker/download.
+That's it. The next build on `main` signs `rclicker.exe`, checks the signature, and publishes it to the release behind https://clicker.rotmanav.ca/download.
 
 ## How to check a download is signed
 

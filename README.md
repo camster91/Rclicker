@@ -14,7 +14,7 @@ Phone (mobile data or any Wi-Fi)  ──HTTPS──▶  rclicker relay (Cloudfla
 
 Both the phone and the PC make **outgoing** HTTPS connections (port 443) to a small relay on Cloudflare. Nothing connects *into* the PC, so there's no firewall prompt and no need for the two devices to share a network. Commands are **end-to-end encrypted**: the relay passes them along but can't read or fake them.
 
-Website and relay: **https://rotmanav.ca/clicker** (built into the app). Download: **https://rotmanav.ca/clicker/download**. The original address `https://rclicker.cameron-rotman.workers.dev` keeps working.
+Website and relay: **https://clicker.rotmanav.ca** (built into the app). Download: **https://clicker.rotmanav.ca/download**. The older addresses (`rotmanav.ca/clicker`, `rclicker.cameron-rotman.workers.dev`) redirect there, and apps already installed keep connecting through them.
 
 ## How to run
 
@@ -58,7 +58,7 @@ rclicker.exe [--relay https://<relay address>] [--console]
 
 - Windows 10 (1809) or later, or Windows 11. x64 (an ARM64 build is also produced).
 - Microsoft PowerPoint (desktop app).
-- **Internet access on the PC.** Outgoing HTTPS to `rotmanav.ca` must be allowed.
+- **Internet access on the PC.** Outgoing HTTPS to `clicker.rotmanav.ca` must be allowed.
 - A phone with a modern browser (iPhone Safari, Android Chrome) and any internet connection.
 - Nothing else to install. The `.exe` contains the .NET runtime.
 
@@ -72,7 +72,7 @@ rclicker is built to get through typical corporate networks:
 
 What IT may need to allow:
 
-- `https://rotmanav.ca/clicker`.
+- `https://clicker.rotmanav.ca`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
 - Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being set up (see [docs/code-signing.md](docs/code-signing.md)).
 
