@@ -74,7 +74,7 @@ What IT may need to allow:
 
 - `https://rotmanav.ca/clicker`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Version 0.2.x is **not code-signed** yet.
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being set up (see [docs/code-signing.md](docs/code-signing.md)).
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
@@ -162,7 +162,6 @@ Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <t
 
 ## Roadmap (not in 0.2)
 
-- Code-signed `.exe` (fewer SmartScreen and app-control blocks)
 - Long-polling fallback for proxies that block WebSockets
 - PowerPoint-native control (COM / API) instead of key presses
 - Google Slides and other presentation apps

@@ -11,6 +11,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write # Azure sign-in without stored secrets (OIDC), used only for code signing.
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +32,36 @@ jobs:
 
       - name: Publish win-x64
         run: dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
+
+      # Code signing (Azure Artifact Signing). Runs only on main and only once the
+      # AZURE_* repository variables exist; see docs/code-signing.md.
+      - name: Sign in to Azure (code signing)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign rclicker.exe
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\artifacts\publish\win-x64\rclicker.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify signature
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature artifacts/publish/win-x64/rclicker.exe
+          $sig | Format-List Status, StatusMessage, SignerCertificate
+          if ($sig.Status -ne 'Valid') { throw "rclicker.exe signature is $($sig.Status)" }
 
       - uses: actions/upload-artifact@v4
         with:
