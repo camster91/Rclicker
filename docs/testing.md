@@ -3,72 +3,66 @@
 ## Automated tests
 
 ```bash
-dotnet test RClicker.sln -c Release
+dotnet test RClicker.sln -c Release      # Windows app logic + relay client (any OS)
+cd relay && npm ci && npm test             # relay, inside the real Workers runtime (Miniflare)
 ```
 
-About 190 xUnit tests in `tests/RClicker.Tests` (many are data-driven cases). They never press real keys: the presentation controller and key sender are fakes, and the integration tests run a real Kestrel server on `127.0.0.1` with a random port.
+Neither suite presses real keys: the presentation controller and key sender are fakes.
 
-| Requirement | Tests |
+### C# (`tests/RClicker.Tests`)
+
+| Area | Tests |
 | --- | --- |
-| Tokens are cryptographically generated (≥128 bits, unique, balanced bits, URL-safe) | `SessionTokenTests` |
-| Old tokens become invalid after regeneration | `SessionManagerTests.Regenerate_*`, `WebSocketControllerTests.RegeneratingSession_*`, `HttpServerTests.SessionStatusEndpoint_*` |
-| Missing / invalid / expired tokens rejected | `SessionManagerTests`, `WebSocketControllerTests.MissingToken_*`, `InvalidToken_*`, `CommandsWithExpiredSession_*` |
-| Valid token establishes a controller session | `WebSocketControllerTests.ValidToken_*`, `AllFiveCommands_*` |
-| Unsupported commands rejected (`press-key`, `send-text`, `execute-command`, `run-process`, case variants) | `PresentationCommandsTests`, `ControllerProtocolTests`, `WebSocketControllerTests.UnsupportedAndMalformed_*` |
-| Commands map to the right actions and keys (Right, Left, F5, B, Esc) | `CommandRouterTests`, `KeyboardPresentationControllerTests` |
-| Malformed JSON / binary / oversized / invalid UTF-8 never crash the server | `ControllerProtocolTests`, `WebSocketControllerTests.UnsupportedAndMalformed_*`, `InvalidUtf8_*` |
-| Rate limiting / debounce: one tap gives one action, flooding is capped | `CommandRateLimiterTests`, `CommandRouterTests`, `WebSocketControllerTests.RapidDoubleTap_*`, `MessageFlood_*` |
-| Local URL generation | `ControllerUrlTests` |
-| QR contains the full URL (decoded with ZXing), has a quiet zone, changes with the session | `QrCodeMatrixTests` |
-| Private IPv4 selection against representative adapters (Wi-Fi, Ethernet, Hyper-V, WSL, VMware, WireGuard, Tailscale, Bluetooth, loopback, link-local, down, none) | `LanAddressSelectorTests` |
-| Disconnect / reconnect, grace period, busy second phone, same-device takeover, shutdown | `ControllerHubTests`, `WebSocketControllerTests.Dropped*`, `AfterGracePeriod_*`, `SecondPhone_*`, `SameBrowserNewTab_*`, `StoppingServer_*` |
-| PowerPoint focus policy | `PowerPointTargetPolicyTests`, `KeyboardPresentationControllerTests` |
-| Static file whitelist, path traversal, DNS rebinding, cross-origin, security headers, port fallback | `HttpServerTests`, `WebSocketControllerTests.CrossOrigin*`, `SmallServerPiecesTests` |
+| Session keys: CSPRNG, 256-bit, unique, URL-safe, redacted in logs; regenerate, expiry | `SessionTokenTests`, `SessionManagerTests` |
+| Key derivation and AES-GCM match an **independent Python implementation** (fixed vectors); wrong room, direction or tampering rejected | `RelayCryptoTests` |
+| Relay URL rules (https only, http only for localhost), key in fragment, wss address | `RelayUrlsTests` |
+| Relay client against a scripted fake relay: claims the right room without revealing the key; decrypts, executes and acks all five commands; **replay dropped**; stale nonce refused with a new hello; unsupported or undecryptable messages ignored; double tap executes once; phone drop → Reconnecting → Ready; New session ends the old room and claims a new one; Quit sends shutdown; relay-ended room → fresh session; connection drop → Offline → reclaims the same room with the same host key; unreachable relay → Offline with a reason | `RelayHostClientTests` |
+| Command whitelist, malformed JSON, oversized messages | `PresentationCommandsTests`, `ControllerProtocolTests` |
+| Command → action → key mapping; PowerPoint focus policy; rate limiting | `CommandRouterTests`, `KeyboardPresentationControllerTests`, `PowerPointTargetPolicyTests`, `CommandRateLimiterTests` |
+| QR decodes (ZXing) to the full relay URL, has a quiet zone, stays ≤ version 6 | `QrCodeMatrixTests` |
 
-CI (`.github/workflows/ci.yml`) runs restore, the Release build, tests and the `win-x64` publish on `windows-latest`.
+### Relay (`relay/test/relay.test.ts`, vitest + `@cloudflare/vitest-pool-workers`)
 
-## Manual QA performed for 0.1.0
+Phone page served with security headers and a strict path whitelist; WebSocket only, room id format, cross-origin refused; PC + phone pairing and forwarding both ways; wrong token, unclaimed room and foreign PC refused; PC offline/online notices and reclaim; ping auto-response; busy second phone; same-browser takeover; seat held then released (alarm); New session (4401) and Quit (4410); malformed or hostile messages not forwarded; oversized (1009) and flood (1008) disconnects; unauthenticated sockets time out; WebCrypto derivation and decryption match the Python vectors.
 
-Performed in a Linux cloud container (no Windows, PowerPoint or physical phones available).
+CI (`.github/workflows/ci.yml`) runs both suites, plus the `win-x64` publish on `windows-latest`.
 
-**Phone web UI.** The real server ran with a fake key sender that logs keys, driven by headless Chromium (Playwright) with device emulation:
+## Manual / end-to-end QA performed for 0.2.0
 
-- Layout at 375×667 (iPhone SE), 390×844 (iPhone 14), 430×932 (iPhone 14 Pro Max), 412 px (Pixel 7), 768×1024 (tablet), 1440×900 (desktop) and 844×390 (landscape). All buttons ≥ 44 px, nothing overflows, Next is the largest control.
-- One tap of Next → exactly one Right Arrow. Five taps within 300 ms → one key. Nine taps 340 ms apart → nine keys.
-- Previous/Start/Black/End → Left/F5/B/Esc. Arrow keys on a keyboard work. Visible focus ring on Tab. Accessible names are present.
-- "PowerPoint not active" and "Black in editor" messages appear on the phone.
-- Second phone → "Another phone is in control" and can't send. Same browser, new tab → old tab told "Opened somewhere else".
-- Offline blip → reconnects. New session → "Session ended". Invalid/missing token → correct message. Receiver quit → "rclicker closed".
+Done in a Linux cloud container. **No Windows PC, no PowerPoint and no physical phones were available.**
 
-**Published `rclicker.exe` (win-x64), run under Wine 9 with a virtual display.** This is a smoke test, not a substitute for Windows:
+1. **Local relay (`wrangler dev`) + real PC client + real phone page in headless Chromium (iPhone 14 / Pixel 7 emulation).** 15/15 checks passed:
+   - Phone connects; PC shows "Connected — iPhone".
+   - Next → exactly one Right Arrow. 5 rapid taps → 1 key. 9 taps 340 ms apart → 9 keys. Previous/Start/Black/End → Left/F5/B/Esc.
+   - "PowerPoint is not the active window" shown on the phone.
+   - Second phone told "Another phone is in control".
+   - The session key never appears in the WebSocket URL or any frame sent to the relay.
+   - Works again after the phone goes offline and back.
+   - New session → old phone "Session ended", and the new QR code works. Wrong key → "Session ended".
+   - Quit → "rclicker closed". No page errors.
+2. **Live relay (`https://rclicker.cameron-rotman.workers.dev`) + real PC client** through this container's outbound HTTPS proxy, with a protocol-identical phone simulator:
+   - All five commands acked "ok" and pressed the right keys.
+   - **Round trip about 100 ms.**
+   - Second phone 4409, wrong key 4401, New session 4401, keep-alive pong.
+   - The real phone page could not be loaded in a browser against the live relay from this container: its proxy doesn't support browser WebSockets. The page itself was verified against the identical relay code locally (step 1).
+3. Phone page layout (unchanged from 0.1) was checked at 375/390/430/768/1440 px and in landscape.
 
-- Launches, shows the window, starts the server (the phone page returned HTTP 200).
-- Wine exposed no network adapters, so the window correctly showed **No network** (no QR code). The QR rendering in the desktop window was therefore **not** seen.
-- Help dialog opens. New session doesn't crash. Quit stops the server (port closed) and the process exits.
-- A second launch shows "already running" and exits.
-- Port fallback was exercised by accident: with 8765 taken, the app moved to 8766.
+## Not yet verified (needs real hardware) — "Completed but awaiting verification"
 
-## Not yet verified (needs a real Windows PC + PowerPoint + phones)
-
-Status: **Completed but awaiting verification**.
-
-- [ ] Windows 11: launch, firewall prompt, QR rendering and scanning from 1–3 m on a monitor/projector, adapter dropdown with real adapters, Copy, network change (switch Wi-Fi) updates the QR code.
-- [ ] PowerPoint: Next → exactly one slide, Previous → exactly one back, Start → slideshow from slide 1, Black toggles, End exits. Also with Presenter View on two monitors.
-- [ ] Foreground check against real PowerPoint window classes (`PPTFrameClass`, `screenClass`, `PodiumParent`) across PowerPoint versions (M365, 2021, 2019).
-- [ ] Rapid tapping during a real slideshow with animations.
-- [ ] Physical iPhone Safari and Android Chrome: scan, tap, lock phone for 1+ min and unlock (reconnect), Wi-Fi off/on, airplane mode.
-- [ ] Microsoft Edge and Chrome on another PC as the controller.
-- [ ] Closing the window while a phone is connected (phone shows "closed").
+- [ ] Windows 11 + PowerPoint: Next/Previous exactly one slide, Start, Black, End, Presenter View.
+- [ ] Real iPhone Safari and Android Chrome on **mobile data**: scan, tap, lock for 1+ min and unlock, airplane mode on/off, screen stays awake while connected.
+- [ ] A real corporate network: proxy with sign-in (NTLM/Kerberos), PAC file, TLS inspection, `*.workers.dev` filtering, WebSocket blocking.
+- [ ] Latency from the presentation location (tap → slide change should feel instant, under 300 ms).
 - [ ] `win-arm64` build on ARM Windows.
 
 ### Suggested manual script (15 minutes)
 
-1. Run `rclicker.exe`. Allow on Private networks.
-2. Open a 10-slide deck. Scan the QR code. Status shows `Connected — iPhone`, and the QR code hides.
-3. Click PowerPoint. Tap **Start** (slide 1 full screen), **Next** ×3 (slide 4), **Previous** (slide 3), **Black** (black), **Black** (back), **End** (editor).
-4. Tap Next 5× as fast as possible: expect at most 2 slide changes (fast double taps collapse).
-5. Lock the phone for 60 s, unlock: `Reconnecting…` then `Connected`, and Next works.
-6. Scan with a second phone: "Another phone is in control".
-7. Click **New session**: the phone shows "Session ended", and the new QR code works.
-8. Click Notepad, tap Next: the phone says "PowerPoint is not the active window". Nothing is typed in Notepad.
+1. Run `rclicker.exe`. The window shows "Ready — scan the QR code" (no firewall prompt expected).
+2. Open a 10-slide deck. Turn the phone's Wi-Fi **off** (mobile data only) and scan the QR code. The status shows "Connected — iPhone" and the QR code hides.
+3. Click PowerPoint. Tap **Start** (slide 1), **Next** ×3 (slide 4), **Previous** (slide 3), **Black**, **Black**, **End**.
+4. Tap Next 5× as fast as possible: expect at most 2 slide changes.
+5. Lock the phone for 60 s and unlock: "Reconnecting…" then "Connected", and Next works.
+6. Unplug the PC's network for 10 s: the phone shows "Waiting for computer…" and recovers when the network is back.
+7. Scan with a second phone: "Another phone is in control".
+8. Click **New session**: the first phone shows "Session ended"; the new QR code works.
 9. Quit: the phone shows "rclicker closed".

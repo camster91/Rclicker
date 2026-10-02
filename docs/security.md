@@ -1,57 +1,52 @@
 # Security
 
-rclicker 0.1 is a **local-network tool** for moving slides. This page describes what it protects against, how, and what it does not protect against.
+rclicker 0.2 moves slides from a phone through a relay on the internet. This page covers what it protects against, how, and what it doesn't.
 
 ## Threat model in one paragraph
 
-Anyone on the same network can reach the receiver's port. The **session token** in the QR code is the only credential. Whoever has a valid token, and gets the single controller seat, can do exactly five things: next, previous, start slideshow, toggle black screen, end slideshow, and only while PowerPoint is the active window (by default). There is no way to send other keys, type text, read files or run programs.
+Anyone on the internet can reach the relay. The **session key** in the QR code (256 bits, in the URL fragment) is the only thing that grants control, and it never leaves the phone and the PC. The relay is treated as **untrusted for content**: it can see that a room exists and when messages flow, but it can't read commands, forge them, or replay them. Whoever has the key, and holds the single phone seat, can do exactly five things: next, previous, start slideshow, black screen, end slideshow, and by default only while PowerPoint is the active window.
 
-## Controls in place
+## Controls
 
 | Area | What we do | Where |
 | --- | --- | --- |
-| Token strength | 256 bits from the OS CSPRNG (`RandomNumberGenerator`), base64url. Not a short code. | `SessionToken` |
-| Token comparison | Constant-time (`CryptographicOperations.FixedTimeEquals`) after a shape check. | `SessionManager.Validate` |
-| Token lifetime | Memory only, never written to disk. Invalid after **New session**, after 12 h, or when the app closes. Re-checked on **every command**, not just at connect. | `SessionManager`, `ControllerEndpoint` |
-| Authentication | WebSocket upgrade is refused with HTTP 401 before any socket exists for missing, invalid or expired tokens. | `ControllerEndpoint.HandleAsync` |
-| Command whitelist | Exact, case-sensitive match on 5 names. Everything else gets `unsupported_command` and nothing runs. No "press key", "send text", "execute" or "run" exists anywhere. | `PresentationCommands`, `ControllerProtocol` |
-| Keyboard surface | `PresentationKey` enum has 5 members (Right, Left, F5, B, Esc). `Win32KeySender` can't press anything else. | `KeyboardPresentationController`, `Win32KeySender` |
-| Wrong-window input | Keys are only sent when `POWERPNT` is the foreground process (default on). "B" is refused in the PowerPoint editor. | `PowerPointTargetPolicy` |
-| One controller | First phone wins. Others are told "busy" (close 4409) and can't act. | `ControllerHub` |
-| Malformed input | Messages > 512 bytes are discarded unparsed. JSON depth ≤ 4. Binary frames, invalid UTF-8, non-objects and wrong types are rejected without exceptions escaping. | `ControllerEndpoint`, `ControllerProtocol` |
-| Flooding / DoS | Per-connection cap 20 messages/s (then disconnect). Command duplicate filter 200 ms plus token bucket (burst 6, 3/s). Kestrel limits: 64 connections, 8 WebSockets, 4 KB bodies, 16 KB headers. | `ControllerEndpoint`, `CommandRateLimiter`, `RemoteServer` |
-| Static files | Three files embedded in the assembly, served from a fixed path → content map. No file system access, so no path traversal. | `StaticAssets` |
-| Cross-origin | WebSocket and API requests with an `Origin` that isn't the server's own are refused (403). No CORS headers are sent. | `RequestGuard` |
-| DNS rebinding | Requests whose `Host` isn't an IP literal (or `localhost`) are refused (400). The QR always uses an IP. | `RequestGuard` |
-| Browser hardening | `Content-Security-Policy: default-src 'none'; script-src 'self'; …; connect-src 'self' ws://<host>; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. No `Server` header. No external scripts, fonts or images. | `RequestGuard`, `wwwroot/` |
-| Token leakage in logs | ASP.NET Core request logging (which prints full URLs) is filtered to Warning. Our logs only print a redacted prefix (`AbCd…`). | `RemoteServer.Build`, `SessionToken.Redact` |
-| Token in the session-check API | `GET /api/session` reads the token from the `X-Session-Token` header only, not the URL. | `RemoteServer.DispatchAsync` |
-| Firewall | Never modified by the app. The user decides (see README). | — |
-| Single instance | A per-user mutex prevents two receivers from both sending keys. | `Program` |
+| Key strength | 256 bits from the OS CSPRNG, base64url. | `SessionToken` |
+| Key never sent to servers | It lives in the QR URL **fragment** (`#k=…`), which browsers don't send. The relay gets a room id and a hash, both one-way derived (HMAC-SHA-256). | `RelayKeys`, `app.js` |
+| End-to-end encryption | AES-256-GCM with a fresh random nonce per message. Additional data binds each message to its room and direction, so it can't be moved to another room or reflected back. | `RelayCipher`, `app.js` |
+| Replay protection | The PC sends a random challenge (nonce) in its hello. Every command must carry it plus a strictly increasing id. Old or repeated messages are dropped. | `RelayHostClient.CheckFreshness` |
+| Joining a room | The phone shows a token derived from the key; the relay compares its SHA-256 (constant time) to the hash the PC registered. A wrong key gets close 4401. | `room.ts` `onAuth` |
+| Owning a room | The PC registers a private host key (hash stored). Another client can't take over the PC side of a room (4403). | `room.ts` `onClaim` |
+| Command whitelist | Exact match on 5 names. No "press key", "send text", "run" or similar exists anywhere. | `PresentationCommands`, `ControllerProtocol` |
+| Keyboard surface | Only Right, Left, F5, B and Esc can ever be pressed. | `KeyboardPresentationController`, `Win32KeySender` |
+| Wrong-window input | Keys only go to the foreground window when it's `POWERPNT` (default on). "B" is refused in the PowerPoint editor. | `PowerPointTargetPolicy` |
+| One controller | First phone wins; others get "busy" (4409). The QR code hides itself on the PC once a phone connects. | `room.ts`, `MainForm` |
+| Session lifetime | Key in memory only. **New session** ends the room at the relay (old QR codes report "ended"). Quit ends it too. 12 h session / 24 h room hard limit. | `SessionManager`, `room.ts` |
+| Malformed input | Relay: max 2 KB per message, JSON-only, field formats validated, unknown types ignored. PC: decryption must succeed, plaintext ≤ 512 bytes, JSON depth ≤ 4. | `room.ts`, `ControllerProtocol` |
+| Flooding | Relay: 20 messages/s per socket (then close 1008); unauthenticated sockets closed after 10 s. PC: duplicate filter plus token bucket. | `room.ts`, `CommandRateLimiter` |
+| Cross-site use | Phone WebSockets must come from the relay's own origin (403 otherwise). | `index.ts` |
+| Phone page hardening | Strict CSP (`default-src 'none'`, self-only scripts and connections), `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, HSTS, no external resources. Only 3 whitelisted paths are served; everything else is 404. | `assets.ts` |
+| PC network exposure | **None inbound.** The PC only makes an outbound HTTPS connection; nothing listens on the PC. | `RelayHostClient` |
+| Logs | Only a redacted key prefix (`AbCd…`) is ever logged. | `SessionToken.Redact` |
 
-## Known limitations (be aware)
+## Known limitations
 
-1. **Not encrypted.** The connection is plain HTTP/WebSocket. Being on the LAN does **not** mean the traffic is encrypted. Someone on the same Wi-Fi who can capture traffic (an open network, a compromised router, ARP spoofing) can see the token and the commands. They could then try to connect, but would still be refused while your phone holds the seat. Use trusted networks. We deliberately did not add a self-signed HTTPS setup, because it makes phones show scary certificate warnings and breaks onboarding.
-2. **The QR code is a key.** If the window with the QR code is shown on the projector, the audience can scan it. Mitigations: only one phone can control at a time, and the QR code hides itself once a phone connects. If in doubt, click **New session**, which disconnects everyone and invalidates the old code.
-3. **Seat reservation uses a non-secret client id.** The "same phone may reconnect / take over its own tab" rule trusts a random id stored in the phone browser's `localStorage`. An attacker who has the token **and** sniffs that id from the network (see 1) could take over the seat. Pressing **New session** recovers.
-4. **Token in the URL.** The token is part of the page URL, so it appears in the phone's browser history. It's useless after the session ends.
-5. **Listens on all interfaces.** The server binds `0.0.0.0`, including VPN or virtual adapters and, if the PC has a public IP with no firewall, the internet. The token is still required. Keep Windows Firewall on and allow the app on **Private** networks only.
-6. **Foreground check is a heuristic.** It trusts the process name `POWERPNT` and well-known window classes. If the user disables the check, keys go to whatever window is active, just like a USB clicker.
-7. **Elevation (UIPI).** If PowerPoint runs as administrator, Windows silently drops the key presses. The app can't detect this reliably. It's documented in Troubleshooting.
-8. **Unsigned binary.** The 0.1 `.exe` isn't code-signed, so SmartScreen may warn. Only run copies from a source you trust.
-9. **No brute-force lockout.** Not needed at 256 bits, and Kestrel connection limits bound the request rate.
+1. **The QR code is the key.** Anyone who scans it before your phone does can control the slides. Scan it before projecting; once your phone is connected, others are refused and the QR code hides itself. **New session** revokes everything.
+2. **The relay sees metadata.** Cloudflare (and anyone operating the relay account) can see room ids, connection times, rough message counts and phone/PC IP addresses, but not commands.
+3. **The relay can deny service.** Whoever runs the relay can drop or delay messages. It can't fake them.
+4. **Trust in the phone page.** The phone runs JavaScript served by the relay. Someone who controls the relay deployment could serve a modified page that leaks the key. This is the main trust assumption: only deploy the relay from this repository, and protect the Cloudflare account (use 2FA).
+5. **Seat reservation uses a non-secret client id.** Someone who has the QR key could imitate your browser's client id (not visible to the network; TLS hides it) to take over the seat. New session recovers.
+6. **Foreground check is a heuristic.** It trusts the process name and window class. When turned off, keys go to whatever window is active, like a USB clicker.
+7. **Elevation (UIPI).** If PowerPoint runs as administrator, Windows silently drops key presses.
+8. **Unsigned binary.** 0.2 isn't code-signed; SmartScreen or app-control policies may block it.
+9. **Corporate TLS inspection** can see the (still end-to-end encrypted) payloads and metadata, the same as any HTTPS traffic.
 
-## Security review checklist (0.1)
+## Review checklist (0.2)
 
-Reviewed against the implementation before release:
-
-- [x] Arbitrary command execution: none. No process launching, shell, scripting host or COM.
-- [x] Arbitrary keyboard input: impossible from the browser (enum of 5 keys, whitelist of 5 commands).
-- [x] Path traversal / unsafe static files: embedded whitelist only; tests try `..`, encoded `..`, case variants and DLL names.
-- [x] Token leakage: no request URL logging; redacted logs; header-based session check; `no-referrer`; nothing persisted.
-- [x] Cross-origin: Origin check, no CORS, CSP, frame denial.
-- [x] WebSocket auth: checked before upgrade; re-checked per command; regeneration closes live sockets.
-- [x] Predictable tokens: CSPRNG, 256 bits; tested for uniqueness and bit balance.
-- [x] Stale sessions: regenerate, 12 h expiry, process exit.
-- [x] LAN exposure: documented above (limitations 1 and 5).
-- [x] DoS via rapid commands: per-connection message cap, rate limiter, Kestrel limits; tested.
+- [x] No inbound ports on the PC; outbound 443 only.
+- [x] Key never in URLs sent to servers, logs or storage; relay holds only hashes and derived ids.
+- [x] Relay can't read, forge or replay commands (AEAD with room/direction binding, nonce + counter).
+- [x] Arbitrary command execution or keyboard input impossible (whitelists on both ends).
+- [x] Phone page: static whitelist, strict CSP, no third-party content.
+- [x] DoS: size, rate and auth-timeout limits at the relay; rate limiter at the PC.
+- [x] Stale sessions: explicit end, expiry, tombstones.
+- [x] Cross-implementation crypto vectors (Python ↔ C# ↔ WebCrypto) tested.

@@ -1,20 +1,27 @@
 # rclicker
 
-Turn your phone into a PowerPoint clicker. No app to install on the phone.
+Turn your phone into a PowerPoint clicker. No app to install on the phone, and it works **even when the phone and the computer can't see each other on the network**, like on office, school and guest Wi-Fi, or with the phone on mobile data.
 
 1. Run `rclicker.exe` on the presentation computer.
 2. Scan the QR code it shows with your phone's camera.
 3. Tap **Next**, **Previous**, **Start**, **Black** or **End**.
 
-Version 0.1.0 works on the **local network only**: the phone and the computer must be on the same Wi-Fi or LAN. There is no cloud service, no account and no data leaves your network.
+## How it works
+
+```
+Phone (mobile data or any Wi-Fi)  ──HTTPS──▶  rclicker relay (Cloudflare)  ◀──HTTPS──  PC running rclicker.exe
+```
+
+Both the phone and the PC make **outgoing** HTTPS connections (port 443) to a small relay on Cloudflare. Nothing connects *into* the PC, so there's no firewall prompt and no need for the two devices to share a network. Commands are **end-to-end encrypted**: the relay passes them along but can't read or fake them.
+
+Relay in use: `https://rclicker.cameron-rotman.workers.dev` (built into the app).
 
 ## How to run
 
-1. Start **rclicker** (`rclicker.exe`). A small window opens with a QR code.
-   - The first time, Windows Firewall may ask whether to allow it. Allow it on **Private networks** (see [Firewall](#firewall)).
+1. Start **rclicker** (`rclicker.exe`). The window shows **Ready — scan the QR code**.
 2. Open your presentation in **PowerPoint**.
-3. **Scan the QR code** with your phone camera and open the link. The page shows **● Connected**.
-4. **Click once on the PowerPoint window** so it is the active window, then use the phone:
+3. **Scan the QR code** with your phone camera and open the link. The phone shows **● Connected**.
+4. **Click once on the PowerPoint window** so it's the active window, then use the phone:
 
 | Phone button | What PowerPoint gets | Effect |
 | --- | --- | --- |
@@ -28,122 +35,131 @@ Closing the rclicker window ends the session immediately. The phone shows "rclic
 
 ### Desktop window
 
-- **QR code + address**: what the phone opens. The QR code hides itself while a phone is connected so the audience can't scan it off the projector (click **Show QR code** to see it again).
-- **Status**: `Ready`, `Connected — iPhone`, `Reconnecting…`, `No network`, or `Not running` with the reason.
-- **Network**: choose a different address if the computer has several (Wi-Fi + Ethernet, VPN, virtual adapters).
-- **Only send keys when PowerPoint is the active window**: on by default. Turn it off to use the remote with another app (a PDF viewer, a browser slideshow). Keys always go to whatever window is active.
+- **QR code + link**: what the phone opens. The QR code hides itself while a phone is connected, so the audience can't scan it off the projector (click **Show QR code** to see it again).
+- **Status**: `Connecting…`, `Ready`, `Connected — iPhone`, `Reconnecting…`, or `Offline` with the reason.
+- **Only send keys when PowerPoint is the active window**: on by default. Turn it off to use the remote with another app (a PDF viewer, a browser slideshow).
 - **New session**: makes a new QR code. The old one stops working and any connected phone is disconnected.
 - **Copy**, **Help**, **Quit**.
 
 ### Command-line options
 
 ```
-rclicker.exe [--port <1024-65535>] [--console]
+rclicker.exe [--relay https://<relay address>] [--console]
 ```
 
-- `--port` use a specific port. By default it uses **8765**, and if that is busy, the next free port up to 8775.
-- `--console` open a console window with diagnostic logs (the session token is never logged in full).
+- `--relay`: use a different relay (also settable with the `RCLICKER_RELAY` environment variable).
+- `--console`: open a console window with diagnostic logs (the session key is never logged in full).
 
 ## Requirements
 
 - Windows 10 (1809) or later, or Windows 11. x64 (an ARM64 build is also produced).
 - Microsoft PowerPoint (desktop app).
-- A phone (iPhone or Android) with a modern browser that can reach the computer over the local network.
+- **Internet access on the PC.** Outgoing HTTPS to `rclicker.cameron-rotman.workers.dev` must be allowed.
+- A phone with a modern browser (iPhone Safari, Android Chrome) and any internet connection.
 - Nothing else to install. The `.exe` contains the .NET runtime.
 
-## Networking
+## Company networks
 
-The phone talks directly to the computer over your local network (`http://<computer IP>:8765`). This only works when the phone can reach the computer.
+rclicker is built to get through typical corporate networks:
 
-**Often blocked:** guest Wi-Fi, hotel Wi-Fi, university and corporate networks frequently use "client isolation", which stops devices on the same Wi-Fi from talking to each other. If that's the case, there's nothing the app can do. Workarounds: use a phone hotspot and connect the computer to it, or a small travel router.
+- **Outgoing only.** Port 443, the same as web browsing. No inbound ports and no firewall changes.
+- **Proxies.** It uses the Windows proxy settings (including PAC/WPAD auto-config) and signs in to the proxy with your Windows account, like a browser does.
+- **TLS inspection.** It trusts the certificates installed on the PC, so proxies that inspect HTTPS work.
 
-Mobile data won't work. The phone must be on Wi-Fi, on the same network as the computer.
+What IT may need to allow:
 
-## Firewall
+- `https://rclicker.cameron-rotman.workers.dev` (some filters block `*.workers.dev` by category).
+- **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Version 0.2 is **not code-signed** yet.
 
-rclicker listens for incoming connections, so Windows Defender Firewall must allow it. The app **never changes firewall settings itself**.
-
-- On first launch Windows usually shows **"Windows Defender Firewall has blocked some features of this app"**. Tick **Private networks** and click **Allow access** (needs admin rights).
-- If your Wi-Fi is set to **Public**, Windows blocks it there. Either set the network to Private (*Settings → Network & internet → Wi-Fi → your network → Network profile type → Private*), or allow the app for Public networks too.
-- If you clicked Cancel earlier: *Windows Security → Firewall & network protection → Allow an app through firewall → Change settings* → find **rclicker** and tick **Private**. If it isn't listed, use **Allow another app…** and pick `rclicker.exe`.
-- Third-party antivirus or firewalls need the same allowance for `rclicker.exe` (TCP port 8765).
+If IT can only allow a company-owned domain, the relay can run on a custom domain such as `rclicker.yourcompany.com` (see [Running your own relay](#running-your-own-relay)).
 
 ## Security
 
-- Each session has a **random 256-bit token** inside the QR code. Without it the computer refuses connections.
-- The token **lives only in memory** while the app runs. It's never saved to disk. **New session** or closing the app makes it invalid at once. Sessions also expire after 12 hours.
-- Only **one phone controls at a time**. A second phone that scans the code is told "Another phone is in control". Nobody can silently take over.
-- The phone can only send five fixed commands (next, previous, start, black, end). It **can't** press arbitrary keys, type text or run anything.
-- The connection is **plain HTTP on your local network: it is not encrypted**. Someone else on the same Wi-Fi could, with effort, watch the traffic and see the token. Use it on networks you trust.
+- Each session has a **random 256-bit key**. It's in the QR code after the `#`, which browsers never send to any server, so the relay never sees it.
+- From that key, the phone and the PC derive an **encryption key** (AES-256-GCM) that only they have. Every command and reply is encrypted. Commands also carry a one-time challenge and a counter, so recorded messages can't be replayed.
+- The relay only gets a room number and a **hash** of a phone pass, so it can tell which phone may join without being able to join itself.
+- Only **one phone controls at a time**. A second phone is told "Another phone is in control".
+- The phone can only send five fixed commands. It **can't** press other keys, type text or run anything.
+- Keys exist only in memory. **New session**, closing the app, or 12 hours makes the old QR code useless.
 
 Details: [docs/security.md](docs/security.md).
 
 ## Troubleshooting
 
+**Window says "Offline"**
+- Check the PC has internet (open any website).
+- The message says why: proxy sign-in needed, address blocked, WebSocket blocked, and so on. Send it to IT along with the relay address above.
+- rclicker keeps retrying on its own (up to every 30 seconds).
+
 **QR opens but the page doesn't load**
-- Check the phone is on the **same Wi-Fi** as the computer, not mobile data.
-- Check Windows Firewall ([Firewall](#firewall)). This is the most common cause.
-- Guest, school and office Wi-Fi often block device-to-device traffic. Try a phone hotspot.
+- The phone needs internet. Try mobile data instead of guest Wi-Fi.
 
-**PC and phone are on different networks**
-- Typical with dual-band or "guest" networks, or when the PC is on Ethernet in a different VLAN. Put both on the same network.
-
-**Windows Firewall blocks the connection**
-- Allow `rclicker.exe` on Private networks, and make sure your Wi-Fi profile is Private. See [Firewall](#firewall).
-
-**VPN interferes**
-- VPNs can route local traffic away or block it. Disconnect the VPN, or enable "allow LAN access" in the VPN client. Make sure the **Network** dropdown shows your Wi-Fi/Ethernet address, not the VPN's.
-
-**Wrong network adapter selected**
-- Pick another address in the **Network** dropdown (for example the `192.168.x.x` one marked Wi-Fi). The QR code updates instantly. Hyper-V, WSL, VMware, Docker and VPN adapters are marked "(virtual/VPN)" and ranked last.
+**Phone says "Waiting for computer…"**
+- The phone is connected, but the PC isn't right now (network drop, laptop asleep). It continues as soon as the PC is back.
 
 **PowerPoint doesn't respond**
 - PowerPoint must be the **active window**. Click on it once. The phone says "PowerPoint is not the active window" when it isn't.
 - **Black** only works during a slideshow. Tap **Start** first.
 - If PowerPoint runs **as administrator**, Windows blocks key presses from normal apps. Run rclicker as administrator too, or run PowerPoint normally.
-- Some localized PowerPoint versions use a different black-screen key. In that case the "." (period) key also blackens the screen from the PC keyboard.
-
-**Port already in use**
-- The app automatically tries ports 8765–8775. If all are busy it says so. Start it with `--port 9000` (or any free port), then scan the new QR code.
+- Some localized PowerPoint versions use a different black-screen key. The "." (period) key on the PC keyboard also blackens the screen.
 
 **Phone shows "Reconnecting…"**
-- Normal after the phone screen locks or Wi-Fi blips. It reconnects by itself when you open it again. Your seat is kept for 30 seconds, so another phone can't grab control meanwhile.
+- Normal after the phone screen locks or the signal drops. It reconnects by itself when you open it again. Your seat is kept for 30 seconds, so another phone can't take control meanwhile. While connected, the page keeps the phone screen on.
 
 **Phone shows "Session ended"**
-- The QR code was replaced (New session) or the app was restarted. Scan the QR code on the computer again.
+- The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Version 0.1 isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
+- Version 0.2 isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
 
 ## Building from source
 
-Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) (LTS).
+Windows app (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
 
 ```bash
-dotnet build RClicker.sln -c Release
 dotnet test RClicker.sln -c Release
 dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 ```
 
-The result is a single self-contained `artifacts/publish/win-x64/rclicker.exe` (~65 MB). Use `-r win-arm64` for ARM64 Windows. The code builds and its tests run on Windows, macOS and Linux. The app itself only runs on Windows.
+This produces one self-contained `rclicker.exe` (about 60 MB). Use `-r win-arm64` for ARM64 Windows. Add `-p:RelayUrl=https://<your relay>` to build in a different relay.
+
+Relay (needs Node.js 20+):
+
+```bash
+cd relay
+npm ci
+npm test          # runs inside the real Workers runtime (Miniflare)
+npm run dev       # local relay on http://localhost:8787; run rclicker.exe --relay http://localhost:8787
+```
 
 Project layout:
 
 ```
-src/RClicker.Core/   platform-neutral: sessions, protocol, rate limiting, LAN address
-                               selection, QR matrix, Kestrel/WebSocket server, phone UI (wwwroot/)
-src/RClicker/        Windows app: WinForms window, SendInput keyboard, foreground check
-tests/RClicker.Tests xUnit tests (unit + real HTTP/WebSocket integration tests)
-docs/                          architecture, security, testing
+src/RClicker.Core/       platform-neutral: sessions, relay client, end-to-end crypto, protocol,
+                         rate limiting, QR matrix
+src/RClicker/            Windows app: WinForms window, SendInput keyboard, foreground check
+tests/RClicker.Tests     xUnit tests (unit + relay client against a fake relay)
+relay/                   Cloudflare Worker + Durable Object relay, and the phone page (relay/public)
+docs/                    architecture, security, testing
 ```
 
-See [docs/architecture.md](docs/architecture.md) and [docs/testing.md](docs/testing.md).
+## Running your own relay
 
-## Roadmap (not in 0.1)
+The relay is free on Cloudflare's Workers Free plan (100,000 requests a day; a one-hour talk uses a few hundred).
 
-Ideas for later versions, deliberately **not** implemented now:
+```bash
+cd relay
+npx wrangler login      # or set CLOUDFLARE_API_TOKEN
+npx wrangler deploy     # prints https://rclicker.<your-subdomain>.workers.dev
+```
 
-- Secure cloud relay for cross-network control (phone on mobile data, isolated Wi-Fi)
+Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <that address>`. For a company domain, add a [Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) to the Worker in the Cloudflare dashboard.
+
+## Roadmap (not in 0.2)
+
+- Code-signed `.exe` (fewer SmartScreen and app-control blocks)
+- Long-polling fallback for proxies that block WebSockets
 - PowerPoint-native control (COM / API) instead of key presses
 - Google Slides and other presentation apps
 - Presenter notes, slide preview, timer
