@@ -3,10 +3,10 @@
 ## Automated tests
 
 ```bash
-dotnet test PresentationRemote.sln -c Release
+dotnet test RClicker.sln -c Release
 ```
 
-About 190 xUnit tests in `tests/PresentationRemote.Tests` (many are data-driven cases). They never press real keys: the presentation controller and key sender are fakes, and the integration tests run a real Kestrel server on `127.0.0.1` with a random port.
+About 190 xUnit tests in `tests/RClicker.Tests` (many are data-driven cases). They never press real keys: the presentation controller and key sender are fakes, and the integration tests run a real Kestrel server on `127.0.0.1` with a random port.
 
 | Requirement | Tests |
 | --- | --- |
@@ -38,9 +38,9 @@ Performed in a Linux cloud container (no Windows, PowerPoint or physical phones 
 - Previous/Start/Black/End → Left/F5/B/Esc. Arrow keys on a keyboard work. Visible focus ring on Tab. Accessible names are present.
 - "PowerPoint not active" and "Black in editor" messages appear on the phone.
 - Second phone → "Another phone is in control" and can't send. Same browser, new tab → old tab told "Opened somewhere else".
-- Offline blip → reconnects. New session → "Session ended". Invalid/missing token → correct message. Receiver quit → "Presentation Remote closed".
+- Offline blip → reconnects. New session → "Session ended". Invalid/missing token → correct message. Receiver quit → "rclicker closed".
 
-**Published `PresentationRemote.exe` (win-x64), run under Wine 9 with a virtual display.** This is a smoke test, not a substitute for Windows:
+**Published `rclicker.exe` (win-x64), run under Wine 9 with a virtual display.** This is a smoke test, not a substitute for Windows:
 
 - Launches, shows the window, starts the server (the phone page returned HTTP 200).
 - Wine exposed no network adapters, so the window correctly showed **No network** (no QR code). The QR rendering in the desktop window was therefore **not** seen.
@@ -63,7 +63,7 @@ Status: **Completed but awaiting verification**.
 
 ### Suggested manual script (15 minutes)
 
-1. Run `PresentationRemote.exe`. Allow on Private networks.
+1. Run `rclicker.exe`. Allow on Private networks.
 2. Open a 10-slide deck. Scan the QR code. Status shows `Connected — iPhone`, and the QR code hides.
 3. Click PowerPoint. Tap **Start** (slide 1 full screen), **Next** ×3 (slide 4), **Previous** (slide 3), **Black** (black), **Black** (back), **End** (editor).
 4. Tap Next 5× as fast as possible: expect at most 2 slide changes (fast double taps collapse).
@@ -71,4 +71,4 @@ Status: **Completed but awaiting verification**.
 6. Scan with a second phone: "Another phone is in control".
 7. Click **New session**: the phone shows "Session ended", and the new QR code works.
 8. Click Notepad, tap Next: the phone says "PowerPoint is not the active window". Nothing is typed in Notepad.
-9. Quit: the phone shows "Presentation Remote closed".
+9. Quit: the phone shows "rclicker closed".

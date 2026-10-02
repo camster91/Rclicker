@@ -1,8 +1,8 @@
-# Presentation Remote
+# rclicker
 
 Turn your phone into a PowerPoint clicker. No app to install on the phone.
 
-1. Run `PresentationRemote.exe` on the presentation computer.
+1. Run `rclicker.exe` on the presentation computer.
 2. Scan the QR code it shows with your phone's camera.
 3. Tap **Next**, **Previous**, **Start**, **Black** or **End**.
 
@@ -10,7 +10,7 @@ Version 0.1.0 works on the **local network only**: the phone and the computer mu
 
 ## How to run
 
-1. Start **Presentation Remote** (`PresentationRemote.exe`). A small window opens with a QR code.
+1. Start **rclicker** (`rclicker.exe`). A small window opens with a QR code.
    - The first time, Windows Firewall may ask whether to allow it. Allow it on **Private networks** (see [Firewall](#firewall)).
 2. Open your presentation in **PowerPoint**.
 3. **Scan the QR code** with your phone camera and open the link. The page shows **● Connected**.
@@ -24,7 +24,7 @@ Version 0.1.0 works on the **local network only**: the phone and the computer mu
 | Black | B | Black screen on/off (slideshow only) |
 | End | Esc | Leave the slideshow |
 
-Closing the Presentation Remote window ends the session immediately. The phone shows "Presentation Remote closed".
+Closing the rclicker window ends the session immediately. The phone shows "rclicker closed".
 
 ### Desktop window
 
@@ -38,7 +38,7 @@ Closing the Presentation Remote window ends the session immediately. The phone s
 ### Command-line options
 
 ```
-PresentationRemote.exe [--port <1024-65535>] [--console]
+rclicker.exe [--port <1024-65535>] [--console]
 ```
 
 - `--port` use a specific port. By default it uses **8765**, and if that is busy, the next free port up to 8775.
@@ -61,12 +61,12 @@ Mobile data won't work. The phone must be on Wi-Fi, on the same network as the c
 
 ## Firewall
 
-Presentation Remote listens for incoming connections, so Windows Defender Firewall must allow it. The app **never changes firewall settings itself**.
+rclicker listens for incoming connections, so Windows Defender Firewall must allow it. The app **never changes firewall settings itself**.
 
 - On first launch Windows usually shows **"Windows Defender Firewall has blocked some features of this app"**. Tick **Private networks** and click **Allow access** (needs admin rights).
 - If your Wi-Fi is set to **Public**, Windows blocks it there. Either set the network to Private (*Settings → Network & internet → Wi-Fi → your network → Network profile type → Private*), or allow the app for Public networks too.
-- If you clicked Cancel earlier: *Windows Security → Firewall & network protection → Allow an app through firewall → Change settings* → find **PresentationRemote** and tick **Private**. If it isn't listed, use **Allow another app…** and pick `PresentationRemote.exe`.
-- Third-party antivirus or firewalls need the same allowance for `PresentationRemote.exe` (TCP port 8765).
+- If you clicked Cancel earlier: *Windows Security → Firewall & network protection → Allow an app through firewall → Change settings* → find **rclicker** and tick **Private**. If it isn't listed, use **Allow another app…** and pick `rclicker.exe`.
+- Third-party antivirus or firewalls need the same allowance for `rclicker.exe` (TCP port 8765).
 
 ## Security
 
@@ -89,7 +89,7 @@ Details: [docs/security.md](docs/security.md).
 - Typical with dual-band or "guest" networks, or when the PC is on Ethernet in a different VLAN. Put both on the same network.
 
 **Windows Firewall blocks the connection**
-- Allow `PresentationRemote.exe` on Private networks, and make sure your Wi-Fi profile is Private. See [Firewall](#firewall).
+- Allow `rclicker.exe` on Private networks, and make sure your Wi-Fi profile is Private. See [Firewall](#firewall).
 
 **VPN interferes**
 - VPNs can route local traffic away or block it. Disconnect the VPN, or enable "allow LAN access" in the VPN client. Make sure the **Network** dropdown shows your Wi-Fi/Ethernet address, not the VPN's.
@@ -100,7 +100,7 @@ Details: [docs/security.md](docs/security.md).
 **PowerPoint doesn't respond**
 - PowerPoint must be the **active window**. Click on it once. The phone says "PowerPoint is not the active window" when it isn't.
 - **Black** only works during a slideshow. Tap **Start** first.
-- If PowerPoint runs **as administrator**, Windows blocks key presses from normal apps. Run Presentation Remote as administrator too, or run PowerPoint normally.
+- If PowerPoint runs **as administrator**, Windows blocks key presses from normal apps. Run rclicker as administrator too, or run PowerPoint normally.
 - Some localized PowerPoint versions use a different black-screen key. In that case the "." (period) key also blackens the screen from the PC keyboard.
 
 **Port already in use**
@@ -120,20 +120,20 @@ Details: [docs/security.md](docs/security.md).
 Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) (LTS).
 
 ```bash
-dotnet build PresentationRemote.sln -c Release
-dotnet test PresentationRemote.sln -c Release
-dotnet publish src/PresentationRemote/PresentationRemote.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
+dotnet build RClicker.sln -c Release
+dotnet test RClicker.sln -c Release
+dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 ```
 
-The result is a single self-contained `artifacts/publish/win-x64/PresentationRemote.exe` (~65 MB). Use `-r win-arm64` for ARM64 Windows. The code builds and its tests run on Windows, macOS and Linux. The app itself only runs on Windows.
+The result is a single self-contained `artifacts/publish/win-x64/rclicker.exe` (~65 MB). Use `-r win-arm64` for ARM64 Windows. The code builds and its tests run on Windows, macOS and Linux. The app itself only runs on Windows.
 
 Project layout:
 
 ```
-src/PresentationRemote.Core/   platform-neutral: sessions, protocol, rate limiting, LAN address
+src/RClicker.Core/   platform-neutral: sessions, protocol, rate limiting, LAN address
                                selection, QR matrix, Kestrel/WebSocket server, phone UI (wwwroot/)
-src/PresentationRemote/        Windows app: WinForms window, SendInput keyboard, foreground check
-tests/PresentationRemote.Tests xUnit tests (unit + real HTTP/WebSocket integration tests)
+src/RClicker/        Windows app: WinForms window, SendInput keyboard, foreground check
+tests/RClicker.Tests xUnit tests (unit + real HTTP/WebSocket integration tests)
 docs/                          architecture, security, testing
 ```
 

@@ -1,6 +1,6 @@
 # Security
 
-Presentation Remote 0.1 is a **local-network tool** for moving slides. This page describes what it protects against, how, and what it does not protect against.
+rclicker 0.1 is a **local-network tool** for moving slides. This page describes what it protects against, how, and what it does not protect against.
 
 ## Threat model in one paragraph
 

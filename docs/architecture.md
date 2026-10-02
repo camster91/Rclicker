@@ -1,6 +1,6 @@
 # Architecture
 
-Presentation Remote 0.1 is one Windows process. It contains a small web server, and the phone uses an ordinary browser. Nothing else is involved: no cloud, database or phone app.
+rclicker 0.1 is one Windows process. It contains a small web server, and the phone uses an ordinary browser. Nothing else is involved: no cloud, database or phone app.
 
 ```
 ┌─────────────┐
@@ -12,7 +12,7 @@ Presentation Remote 0.1 is one Windows process. It contains a small web server, 
        │ LAN only, http://<PC IPv4>:8765/?session=<token>
        ▼
 ┌──────────────────────────────────────────────┐
-│ PresentationRemote.exe                       │
+│ rclicker.exe                       │
 │                                              │
 │  Web Server        Kestrel (RemoteServer)    │
 │   ├ RequestGuard   IP-literal Host, Origin,  │
@@ -42,9 +42,9 @@ Presentation Remote 0.1 is one Windows process. It contains a small web server, 
 
 | Project | Target | Contents |
 | --- | --- | --- |
-| `src/PresentationRemote.Core` | `net10.0` | Everything that does not need Windows: sessions, wire protocol, command whitelist, rate limiting, `IPresentationController`, keyboard mapping and PowerPoint focus policy, LAN address ranking, QR matrix, the Kestrel server, and the phone UI as embedded resources. |
-| `src/PresentationRemote` | `net10.0-windows10.0.17763.0`, WinForms | `Program` (entry point, single-instance mutex, logging), `MainForm`, `QrCodeView`, Win32 `SendInput` key sender, foreground-window reader. |
-| `tests/PresentationRemote.Tests` | `net10.0`, xUnit | Unit tests and real localhost HTTP/WebSocket integration tests against Core. |
+| `src/RClicker.Core` | `net10.0` | Everything that does not need Windows: sessions, wire protocol, command whitelist, rate limiting, `IPresentationController`, keyboard mapping and PowerPoint focus policy, LAN address ranking, QR matrix, the Kestrel server, and the phone UI as embedded resources. |
+| `src/RClicker` | `net10.0-windows10.0.17763.0`, WinForms | `Program` (entry point, single-instance mutex, logging), `MainForm`, `QrCodeView`, Win32 `SendInput` key sender, foreground-window reader. |
+| `tests/RClicker.Tests` | `net10.0`, xUnit | Unit tests and real localhost HTTP/WebSocket integration tests against Core. |
 
 Why two projects instead of one: the Windows-specific code (WinForms, `user32.dll`) is kept to a thin shell. All logic can then be unit-tested and integration-tested on any OS, including Linux CI, without ever pressing real keys.
 
@@ -109,4 +109,4 @@ The key mapping lives in exactly one place: `KeyboardPresentationController.KeyF
 
 ## Packaging
 
-`dotnet publish -c Release -r win-x64` produces one self-contained, compressed, single-file `PresentationRemote.exe` (~65 MB; .NET + ASP.NET Core + Windows Forms runtimes inside). Trimming is off because WinForms does not support it. `win-arm64` publishes the same way.
+`dotnet publish -c Release -r win-x64` produces one self-contained, compressed, single-file `rclicker.exe` (~65 MB; .NET + ASP.NET Core + Windows Forms runtimes inside). Trimming is off because WinForms does not support it. `win-arm64` publishes the same way.

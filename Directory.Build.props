@@ -1,9 +1,9 @@
 <Project>
   <PropertyGroup>
     <Version>0.1.0</Version>
-    <Product>Presentation Remote</Product>
-    <Company>Presentation Remote</Company>
-    <Copyright>Copyright (c) Presentation Remote contributors</Copyright>
+    <Product>rclicker</Product>
+    <Company>rclicker</Company>
+    <Copyright>Copyright (c) rclicker contributors</Copyright>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

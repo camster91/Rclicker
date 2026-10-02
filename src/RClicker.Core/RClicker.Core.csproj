@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Platform-neutral core: sessions, protocol, command routing, LAN address selection,
+    QR generation and the embedded HTTP/WebSocket server. Kept free of Windows APIs so it
+    can be unit tested on any OS. Windows-specific code lives in RClicker.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>RClicker</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The phone UI is compiled into the assembly: no files on disk, no path traversal surface. -->
+    <EmbeddedResource Include="wwwroot\index.html" LogicalName="wwwroot/index.html" />
+    <EmbeddedResource Include="wwwroot\app.js" LogicalName="wwwroot/app.js" />
+    <EmbeddedResource Include="wwwroot\styles.css" LogicalName="wwwroot/styles.css" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RClicker.Tests" />
+  </ItemGroup>
+
+</Project>
