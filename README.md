@@ -76,13 +76,13 @@ What IT may need to allow:
 
 - `https://clicker.rotmanav.ca`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being set up (see [docs/code-signing.md](docs/code-signing.md)).
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being set up (see [Code signing policy](#code-signing-policy)).
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
 ## Security
 
-- Each session has a **random 256-bit key**. It's in the QR code link (`…/clicker/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
+- Each session has a **random 256-bit key**. It's in the QR code link (`…/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
 - From that key, the phone and the PC derive an **encryption key** (AES-256-GCM) that only they have. Every command and reply is encrypted. Commands also carry a one-time challenge and a counter, so recorded messages can't be replayed.
 - The relay only gets a room number and a **hash** of a phone pass, so it can tell which phone may join without being able to join itself.
 - Only **one phone controls at a time**. A second phone is told "Another phone is in control".
@@ -90,6 +90,23 @@ If IT can only allow a company-owned domain, the relay can also run on your own 
 - Keys exist only in memory. **New session**, closing the app, or 12 hours makes the old QR code useless.
 
 Details: [docs/security.md](docs/security.md).
+
+## Privacy
+
+No accounts, ads, analytics or tracking cookies. Commands are end-to-end encrypted. The relay keeps only what it needs to pair one phone with one PC, and deletes it within about two days at most. Full policy: [docs/privacy.md](docs/privacy.md).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+**Status:** applying. Until the project is approved, releases are unsigned.
+
+- Only `rclicker.exe` built by GitHub Actions from this repository's `main` branch is signed, and an approver confirms every release by hand.
+- Committers and reviewers: [@camster91](https://github.com/camster91)
+- Approvers: [@camster91](https://github.com/camster91)
+- Privacy: [docs/privacy.md](docs/privacy.md). rclicker only talks to its relay to connect your phone and PC; it sends nothing else anywhere.
+
+Setup steps: [docs/code-signing.md](docs/code-signing.md).
 
 ## Troubleshooting
 
@@ -117,7 +134,7 @@ Details: [docs/security.md](docs/security.md).
 - The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Version 0.2.x isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
+- Version 0.2.x isn't code-signed yet. Click **More info → Run anyway** if you trust where you got it.
 
 ## Building from source
 

@@ -4,6 +4,8 @@
     <Product>rclicker</Product>
     <Company>rclicker</Company>
     <Copyright>Copyright (c) rclicker contributors</Copyright>
+    <!-- Product version is exactly <Version> (no +commit suffix): code signing checks it. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
