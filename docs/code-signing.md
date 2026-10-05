@@ -22,7 +22,7 @@ Until one of them is set up, the signing steps in CI are skipped and releases ar
 
 | Requirement | Status |
 | --- | --- |
-| OSI-approved open-source license, with no paid dual license | **To do: add a `LICENSE` file** (your choice of license) |
+| OSI-approved open-source license, with no paid dual license | Done: [MIT](../LICENSE). Dependencies are MIT too (.NET, Microsoft.Extensions, QRCoder) |
 | Public source repository | Done (`camster91/Rclicker`) |
 | Already released, and the download page describes what it does | Done (GitHub Releases, README, clicker.rotmanav.ca) |
 | Built automatically from source | Done (GitHub Actions, `.github/workflows/ci.yml`) |
@@ -36,7 +36,7 @@ Until one of them is set up, the signing steps in CI are skipped and releases ar
 
 ### What you do
 
-1. **Add a license.** Ask me to add one. MIT is the usual choice for small tools: anyone may use, change and share the code, but must keep your copyright notice.
+1. ~~Add a license~~ Done: MIT.
 2. **Turn on 2FA for GitHub:** https://github.com/settings/security → Two-factor authentication.
 3. **Apply** at https://signpath.org/apply. Use these answers:
    - Project: rclicker, `https://github.com/camster91/Rclicker`

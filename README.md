@@ -187,3 +187,7 @@ Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <t
 - Presenter notes, slide preview, timer
 - Laser pointer / pointer mode
 - Managed classroom deployment
+
+## License
+
+[MIT](LICENSE). Free to use, change and share; keep the copyright notice.
