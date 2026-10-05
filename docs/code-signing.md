@@ -59,6 +59,8 @@ In https://github.com/camster91/Rclicker → **Settings → Secrets and variable
 
 That's it. The next build on `main` signs `rclicker.exe`, checks the signature, and publishes it to the release behind https://clicker.rotmanav.ca/download.
 
+To check the connection before publishing, open **Actions → CI → Run workflow**, select `main`, and run it. Once the variables are configured, this signs and verifies the downloadable `rclicker-win-x64` workflow artifact. A manual run does not update the public release; a push to `main` does.
+
 ## How to check a download is signed
 
 Right-click `rclicker.exe` → **Properties** → **Digital Signatures** tab. It should list your name.

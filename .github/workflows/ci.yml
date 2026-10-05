@@ -37,7 +37,7 @@ jobs:
       # Code signing (Azure Artifact Signing). Runs only on main and only once the
       # AZURE_* repository variables exist; see docs/code-signing.md.
       - name: Sign in to Azure (code signing)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -45,7 +45,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign rclicker.exe
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
         uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
@@ -57,7 +57,7 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Verify signature
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
         shell: pwsh
         run: |
           $sig = Get-AuthenticodeSignature artifacts/publish/win-x64/rclicker.exe
@@ -123,6 +123,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          CODE_SIGNED: ${{ github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != '' }}
         run: |
           version=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)
           # Only main publishes the real release; other branches get a separate preview
@@ -132,13 +133,25 @@ jobs:
           else
             tag="v$version-preview"; flags="--prerelease"
           fi
+          if [ "$CODE_SIGNED" = "true" ]; then
+            signing_note="Digitally signed with Azure Artifact Signing. New downloads may still show a Windows SmartScreen prompt while reputation builds."
+          else
+            signing_note="Not code-signed yet."
+          fi
           (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
+            if [ "$CODE_SIGNED" = "true" ]; then
+              gh release view "$tag" --json body --jq '.body' > release-notes.txt
+              if grep -q 'Not code-signed yet' release-notes.txt; then
+                sed -i "s/Not code-signed yet: if Windows warns, choose More info → Run anyway\./$signing_note/g; s/Not code-signed yet\./$signing_note/g" release-notes.txt
+                gh release edit "$tag" --notes-file release-notes.txt
+              fi
+            fi
           else
             gh release create "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip \
               --target "$GITHUB_SHA" --title "rclicker $version" $flags \
-              --notes "Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). Not code-signed yet: if Windows warns, choose More info → Run anyway."
+              --notes "Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). $signing_note"
           fi
           # Builds from main become the "latest" release that clicker.rotmanav.ca/download serves.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
