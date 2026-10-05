@@ -43,6 +43,9 @@ Until the setup below is done, the signing steps in CI are simply skipped.
 3. In the app, open **Certificates & secrets → Federated credentials → Add credential**:
    - Scenario: **GitHub Actions deploying Azure resources**
    - Organization: `camster91`, Repository: `Rclicker`, Entity type: **Branch**, Branch: `main`
+   - Organization ID: `33962910`, Repository ID: `1401803716`
+   - This repository uses GitHub's immutable subject format. Check that Azure's calculated subject is `repo:camster91@33962910/Rclicker@1401803716:ref:refs/heads/main`, with issuer `https://token.actions.githubusercontent.com` and audience `api://AzureADTokenExchange`.
+   - If the repository's OIDC configuration changes, check the current format with `gh api repos/camster91/Rclicker/actions/oidc/customization/sub` before creating the credential.
 4. Back in the signing account, go to **Access control (IAM) → Add role assignment** and give the app `rclicker-github-signing` the role **Artifact Signing Certificate Profile Signer**.
 
 ### 7. Tell GitHub
@@ -56,6 +59,8 @@ In https://github.com/camster91/Rclicker → **Settings → Secrets and variable
 | `AZURE_SIGNING_ENDPOINT` | e.g. `https://eus.codesigning.azure.net` |
 | `AZURE_SIGNING_ACCOUNT` | e.g. `rclickersigning` |
 | `AZURE_SIGNING_PROFILE` | `rclicker` |
+
+Add `AZURE_CLIENT_ID` last, after identity validation, the certificate profile, the federated credential, and the app's signing role are ready. Setting it enables the signing steps on `main`.
 
 That's it. The next build on `main` signs `rclicker.exe`, checks the signature, and publishes it to the release behind https://clicker.rotmanav.ca/download.
 
