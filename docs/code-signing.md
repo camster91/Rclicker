@@ -2,7 +2,7 @@
 
 Signing `rclicker.exe` tells Windows where it came from. That stops the "unknown publisher" warnings, and many company PCs require it before a program may run at all.
 
-There are two ways. The build supports both, but **set up only one**.
+**In use: Azure Artifact Signing.** The SignPath Foundation option below is kept as a free fallback; set up only one.
 
 | | Free: SignPath Foundation | Paid: Azure Artifact Signing |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ There are two ways. The build supports both, but **set up only one**.
 | Each release | a person approves it in SignPath (CI waits up to 1 hour) | automatic |
 | Setup | apply, wait for approval, then about 15 minutes | about 30 minutes plus Microsoft's ID check |
 
-Until one of them is set up, the signing steps in CI are skipped and releases are unsigned.
+When neither is set up, the signing steps in CI are skipped and releases are unsigned.
 
 ## Free: SignPath Foundation
 
