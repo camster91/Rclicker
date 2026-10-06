@@ -40,12 +40,12 @@ permissions: {}
 
 env:
   # Fill these in once (Azure portal); every repository that calls this workflow uses them.
-  AZURE_TENANT_ID: ''
-  AZURE_CLIENT_ID: ''
-  AZURE_SUBSCRIPTION_ID: ''
-  AZURE_SIGNING_ENDPOINT: ''       # e.g. https://eus.codesigning.azure.net
-  AZURE_SIGNING_ACCOUNT: ''        # e.g. camsterSigning
-  AZURE_SIGNING_PROFILE: ''        # certificate profile name
+  AZURE_TENANT_ID: 'b5bdee55-d9ca-4dff-91f6-1a22445d1710'
+  AZURE_CLIENT_ID: '5933cfcf-1e92-46f9-ba71-226192f71417'
+  AZURE_SUBSCRIPTION_ID: '3a6865fe-4a72-4c30-80f9-8f2645e0d6ea'
+  AZURE_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net'       # e.g. https://eus.codesigning.azure.net
+  AZURE_SIGNING_ACCOUNT: 'rclickersigning'        # e.g. camsterSigning
+  AZURE_SIGNING_PROFILE: 'rclicker'        # certificate profile name
 
 jobs:
   sign:
