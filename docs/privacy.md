@@ -29,6 +29,7 @@ rclicker only connects to its relay, `clicker.rotmanav.ca`, which runs on Cloudf
 
 - **PC:** rclicker doesn't install anything, change system settings or write files. Its session key exists only in memory and is gone when you quit. To uninstall, delete `rclicker.exe`.
 - **Phone:** the browser keeps the random browser id described above. Clear the site's data to remove it.
+- **Browser version (`/present`):** the PDF you choose is opened inside your browser and is never uploaded or sent anywhere. The session key exists only in that tab and is gone when you close it. The page's helper libraries (pdf.js and a QR encoder) are loaded from `clicker.rotmanav.ca` itself. The relay downloads them once from a public package mirror and checks each file's fingerprint first, so your browser never contacts those mirrors.
 
 ## The download
 

@@ -35,6 +35,8 @@ On `clicker.rotmanav.ca`:
 | --- | --- |
 | `/` | Marketing page (`public/site.html`). Old QR links with `#k=` are forwarded to `/remote`. |
 | `/remote` | Phone remote (`public/remote.html`, `app.js`, `styles.css`) |
+| `/present` | Present a PDF from a browser, no install (`public/present.html`, `present.js`, `present.css`). The page plays the PC's part: same keys, encryption and freshness checks as `RelayHostClient`, and it shows the PDF with pdf.js instead of pressing keys in PowerPoint. |
+| `/vendor/…` | Third-party browser files for `/present` (pdf.js, a QR encoder). The Worker fetches each from a public npm mirror (jsDelivr, then unpkg) on first use, checks its SHA-384 against `src/vendor-manifest.ts` (made by `scripts/vendor-manifest.mjs`), and serves and caches it from this origin. A file that doesn't match is never served. |
 | `/download` | 302 to the latest GitHub release `rclicker.exe` |
 | `/ws/host`, `/ws/phone` | Relay WebSockets → Durable Object `Room` |
 

@@ -39,6 +39,16 @@ Closing the rclicker window ends the session immediately. The phone shows "rclic
 - **Phone:** stays awake while connected (the page shows "Screen stays on while connected"). On some phones this starts after your first tap.
 - **PC:** won't dim or go to sleep while a phone is connected.
 
+### No install: present a PDF from the browser
+
+On a PC where you can't install anything, open **https://clicker.rotmanav.ca/present** in Chrome, Edge, Firefox or Safari:
+
+1. Export your slides as **PDF** (PowerPoint: File → Export; Google Slides: File → Download; Keynote: File → Export To).
+2. **Choose the PDF** on the page. It's opened in the browser and never uploaded.
+3. **Scan the QR code** with your phone, then click **Start presenting** (full screen).
+
+The phone buttons work the same: Next, Previous, Start (back to slide 1), Black, and End (leave the show). On the PC you can also use the arrow keys, **B** (black), **F** (full screen) and **Esc** (stop). A PDF shows each slide's final state, so animations, transitions and videos don't play; use the Windows app for those.
+
 ### Desktop window
 
 - **QR code + link**: what the phone opens. The QR code hides itself while a phone is connected, so the audience can't scan it off the projector (click **Show QR code** to see it again).

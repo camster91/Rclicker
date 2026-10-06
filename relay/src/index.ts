@@ -1,4 +1,5 @@
 import { SECURITY_HEADERS, serveAsset } from './assets';
+import { serveVendor } from './vendor';
 export { Room } from './room';
 
 const ROOM_ID = /^[A-Za-z0-9_-]{22}$/;
@@ -25,7 +26,7 @@ const LEGACY_HEADERS: Record<string, string> = Object.fromEntries(
 );
 
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
     let path = url.pathname;
 
@@ -38,6 +39,7 @@ export default {
       }
     }
 
+    if (path.startsWith('/vendor/')) return serveVendor(request, path, ctx);
     if (!SOCKETS.has(path)) return serveAsset(request, path);
 
     if (request.method !== 'GET' || request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
