@@ -18,6 +18,8 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Resource-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), screen-wake-lock=(self)',
   'Strict-Transport-Security': 'max-age=31536000',
+  // Keep every page out of search engines (the pages also carry a robots meta tag).
+  'X-Robots-Tag': 'noindex, nofollow',
 };
 
 const PAGE_CSP =
