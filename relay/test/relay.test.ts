@@ -102,6 +102,18 @@ describe('routing', () => {
     expect(remote.headers.get('Cache-Control')).toBe('no-store');
   });
 
+  it('keeps every page out of search engines', async () => {
+    for (const path of ['/', '/remote', '/app.js', '/download', '/nope']) {
+      const response = await SELF.fetch(`https://relay.test${path}`, { redirect: 'manual' });
+      expect(response.headers.get('X-Robots-Tag'), path).toBe('noindex, nofollow');
+    }
+    const redirect = await SELF.fetch('https://rotmanav.ca/clicker/', { redirect: 'manual' });
+    expect(redirect.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+    for (const path of ['/', '/remote']) {
+      expect(await (await SELF.fetch(`https://relay.test${path}`)).text(), path).toContain('<meta name="robots" content="noindex, nofollow">');
+    }
+  });
+
   it('serves only whitelisted files', async () => {
     const files: [string, string][] = [['/app.js', 'text/javascript'], ['/styles.css', 'text/css'], ['/site.css', 'text/css'], ['/site.js', 'text/javascript']];
     for (const [path, type] of files) {
