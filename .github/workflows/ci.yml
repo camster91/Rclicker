@@ -12,6 +12,8 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      exe-artifact-id: ${{ steps.upload-exe.outputs.artifact-id }}
     permissions:
       contents: read
       id-token: write # Azure sign-in without stored secrets (OIDC), used only for code signing.
@@ -34,8 +36,8 @@ jobs:
       - name: Publish win-x64
         run: dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 
-      # Code signing (Azure Artifact Signing). Runs only on main and only once the
-      # AZURE_* repository variables exist; see docs/code-signing.md.
+      # Paid code signing option (Azure Artifact Signing). Runs only on main and only once
+      # the AZURE_* repository variables exist; see docs/code-signing.md.
       - name: Sign in to Azure (code signing)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != ''
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
@@ -65,6 +67,7 @@ jobs:
           if ($sig.Status -ne 'Valid') { throw "rclicker.exe signature is $($sig.Status)" }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        id: upload-exe
         with:
           name: rclicker-win-x64
           path: artifacts/publish/win-x64/rclicker.exe
@@ -103,12 +106,61 @@ jobs:
       - name: Bundle (dry run)
         run: npx wrangler deploy --dry-run --outdir dist
 
+  # Free code signing through SignPath Foundation (see docs/code-signing.md). Runs only on
+  # main and only once the SIGNPATH_* repository variables exist. SignPath signs the exact
+  # file this run built, after a person approves the request in SignPath.
+  sign:
+    needs: [build, relay]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.SIGNPATH_ORGANIZATION_ID != ''
+    runs-on: windows-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read # lets SignPath fetch the unsigned build from this run
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)" >> "$GITHUB_OUTPUT"
+
+      - name: Sign rclicker.exe (waits up to 1 hour for approval)
+        uses: SignPath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.exe-artifact-id }}
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version) }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Verify signature
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature signed/rclicker.exe
+          $sig | Format-List Status, StatusMessage, SignerCertificate
+          if ($sig.Status -ne 'Valid') { throw "rclicker.exe signature is $($sig.Status)" }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rclicker-win-x64-signed
+          path: signed/rclicker.exe
+          if-no-files-found: error
 
   # Publishes the built rclicker.exe as a GitHub Release (direct download, no sign-in).
   # main → release vX.Y.Z (latest); claude/* branches → pre-release vX.Y.Z-preview. Re-runs replace the files.
+  # Uses the SignPath-signed file when the sign job ran; a failed or rejected signing publishes nothing.
   release:
-    needs: [build, relay]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
+    needs: [build, relay, sign]
+    if: >-
+      always() && github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')) &&
+      needs.build.result == 'success' && needs.relay.result == 'success' &&
+      (needs.sign.result == 'success' || needs.sign.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -117,12 +169,13 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: rclicker-win-x64
+          name: ${{ needs.sign.result == 'success' && 'rclicker-win-x64-signed' || 'rclicker-win-x64' }}
           path: dist
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ needs.sign.result == 'success' || vars.AZURE_CLIENT_ID != '' }}
         run: |
           version=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)
           # Only main publishes the real release; other branches get a separate preview
@@ -132,13 +185,18 @@ jobs:
           else
             tag="v$version-preview"; flags="--prerelease"
           fi
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$SIGNED" = "true" ]; then
+            signing="Code-signed: right-click → Properties → Digital Signatures shows who signed it."
+          else
+            signing="Not code-signed yet: if Windows warns, choose More info → Run anyway."
+          fi
           (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
           else
             gh release create "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip \
               --target "$GITHUB_SHA" --title "rclicker $version" $flags \
-              --notes "Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). Not code-signed yet: if Windows warns, choose More info → Run anyway."
+              --notes "Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). $signing"
           fi
           # Builds from main become the "latest" release that clicker.rotmanav.ca/download serves.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then

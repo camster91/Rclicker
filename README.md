@@ -76,13 +76,13 @@ What IT may need to allow:
 
 - `https://clicker.rotmanav.ca`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being set up (see [docs/code-signing.md](docs/code-signing.md)).
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Releases from `main` are code-signed (see [Code signing policy](#code-signing-policy)).
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
 ## Security
 
-- Each session has a **random 256-bit key**. It's in the QR code link (`…/clicker/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
+- Each session has a **random 256-bit key**. It's in the QR code link (`…/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
 - From that key, the phone and the PC derive an **encryption key** (AES-256-GCM) that only they have. Every command and reply is encrypted. Commands also carry a one-time challenge and a counter, so recorded messages can't be replayed.
 - The relay only gets a room number and a **hash** of a phone pass, so it can tell which phone may join without being able to join itself.
 - Only **one phone controls at a time**. A second phone is told "Another phone is in control".
@@ -90,6 +90,22 @@ If IT can only allow a company-owned domain, the relay can also run on your own 
 - Keys exist only in memory. **New session**, closing the app, or 12 hours makes the old QR code useless.
 
 Details: [docs/security.md](docs/security.md).
+
+## Privacy
+
+No accounts, ads, analytics or tracking cookies. Commands are end-to-end encrypted. The relay keeps only what it needs to pair one phone with one PC, and deletes it within about two days at most. Full policy: [docs/privacy.md](docs/privacy.md).
+
+## Code signing policy
+
+`rclicker.exe` is signed with [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (Microsoft), using a certificate for the project owner's verified identity.
+
+- Only `rclicker.exe` built by GitHub Actions from this repository's `main` branch is signed. GitHub signs in to Azure with a short-lived token; no signing key or password is stored anywhere.
+- Each build checks the signature before publishing. To check a download, right-click `rclicker.exe` → **Properties** → **Digital Signatures**.
+- Committers and reviewers: [@camster91](https://github.com/camster91)
+- Approvers: [@camster91](https://github.com/camster91)
+- Privacy: [docs/privacy.md](docs/privacy.md). rclicker only talks to its relay to connect your phone and PC; it sends nothing else anywhere.
+
+Setup steps: [docs/code-signing.md](docs/code-signing.md).
 
 ## Troubleshooting
 
@@ -117,7 +133,7 @@ Details: [docs/security.md](docs/security.md).
 - The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Version 0.2.x isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
+- Versions before 0.2.3 aren't code-signed. Download the latest version. A brand-new signature can still get a SmartScreen prompt for a while; choose **More info → Run anyway** if the publisher shown is the one in [Code signing policy](#code-signing-policy).
 
 ## Building from source
 
@@ -170,3 +186,7 @@ Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <t
 - Presenter notes, slide preview, timer
 - Laser pointer / pointer mode
 - Managed classroom deployment
+
+## License
+
+[MIT](LICENSE). Free to use, change and share; keep the copyright notice.

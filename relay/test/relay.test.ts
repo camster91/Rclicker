@@ -165,11 +165,15 @@ describe('routing', () => {
 
   it('limits new connections per IP address', async () => {
     const headers = { Upgrade: 'websocket', 'CF-Connecting-IP': '203.0.113.7' };
+    // A bad room id is refused after the limiter, so no rooms are created. The limiter's
+    // window follows the wall clock and may roll over mid-loop, so allow up to two windows.
     const statuses: number[] = [];
-    // A bad room id is refused after the limiter, so no rooms are created.
-    for (let i = 0; i < 61; i++) statuses.push((await SELF.fetch('https://relay.test/ws/phone?room=x', { headers })).status);
+    while (statuses.length < 121 && statuses.at(-1) !== 429) {
+      statuses.push((await SELF.fetch('https://relay.test/ws/phone?room=x', { headers })).status);
+    }
+    expect(statuses.at(-1)).toBe(429);
+    expect(statuses.length).toBeGreaterThanOrEqual(61);
     expect(statuses.slice(0, 60).every((s) => s === 400)).toBe(true);
-    expect(statuses[60]).toBe(429);
     // Another address is unaffected.
     const other = await SELF.fetch('https://relay.test/ws/phone?room=x', { headers: { ...headers, 'CF-Connecting-IP': '203.0.113.8' } });
     expect(other.status).toBe(400);

@@ -1,19 +1,86 @@
-# Code signing (Azure Artifact Signing)
+# Code signing
 
-Signing `rclicker.exe` tells Windows who made it. That stops the "unknown publisher" warnings, and many company PCs require it before a program may run at all.
+Signing `rclicker.exe` tells Windows where it came from. That stops the "unknown publisher" warnings, and many company PCs require it before a program may run at all.
 
-We use **Azure Artifact Signing** (formerly "Trusted Signing"), Microsoft's own signing service:
+**In use: Azure Artifact Signing.** The SignPath Foundation option below is kept as a free fallback; set up only one.
 
-- **Cost:** about US$9.99/month (Basic: up to 5,000 signatures, 1 certificate profile).
-- **Who can use it:** individual developers in Canada or the US, or organizations in many countries.
-- **How it fits:** GitHub signs every build from `main` automatically. Nothing secret is stored in GitHub; it signs in to Azure with a short-lived token (OIDC).
+| | Free: SignPath Foundation | Paid: Azure Artifact Signing |
+| --- | --- | --- |
+| Cost | $0 | about US$9.99/month |
+| Publisher name shown by Windows | **SignPath Foundation** | **your verified name** |
+| Who can use it | open-source projects they approve | individuals (Canada/US) or organizations |
+| Each release | a person approves it in SignPath (CI waits up to 1 hour) | automatic |
+| Setup | apply, wait for approval, then about 15 minutes | about 30 minutes plus Microsoft's ID check |
 
-Until the setup below is done, the signing steps in CI are simply skipped.
+When neither is set up, the signing steps in CI are skipped and releases are unsigned.
 
-## What you do (once, about 30 minutes plus Microsoft's ID check)
+## Free: SignPath Foundation
+
+[SignPath Foundation](https://signpath.org) signs open-source projects for free. Their certificate is issued to "SignPath Foundation", and they check that each signed file was built by GitHub Actions from this repository's public source.
+
+### Their requirements and where rclicker stands
+
+| Requirement | Status |
+| --- | --- |
+| OSI-approved open-source license, with no paid dual license | Done: [MIT](../LICENSE). Dependencies are MIT too (.NET, Microsoft.Extensions, QRCoder) |
+| Public source repository | Done (`camster91/Rclicker`) |
+| Already released, and the download page describes what it does | Done (GitHub Releases, README, clicker.rotmanav.ca) |
+| Built automatically from source | Done (GitHub Actions, `.github/workflows/ci.yml`) |
+| File metadata (product name and version) enforced | Done: the exe says `rclicker` / `0.2.2`, and `.signpath/artifact-configuration.xml` only signs a file that matches |
+| Privacy policy, since the app connects to a server | Done: [docs/privacy.md](privacy.md) |
+| "Code signing policy" section with their exact attribution, team roles and a privacy link | Done: the [README](../README.md#code-signing-policy) |
+| No system changes without warning; easy to uninstall | Done: portable exe, no installer, changes nothing; delete it to uninstall |
+| No hacking tools, malware or unwanted features | Done: it can only press five presentation keys |
+| Multi-factor sign-in on GitHub and SignPath for everyone in the team | **To do: turn on 2FA on GitHub** (and on SignPath once you have an account) |
+| A person approves each signing request | Built in: CI waits for your approval |
+
+### What you do
+
+1. ~~Add a license~~ Done: MIT.
+2. **Turn on 2FA for GitHub:** https://github.com/settings/security → Two-factor authentication.
+3. **Apply** at https://signpath.org/apply. Use these answers:
+   - Project: rclicker, `https://github.com/camster91/Rclicker`
+   - What it does: a phone-controlled presentation remote for PowerPoint on Windows
+   - Build system: GitHub Actions
+   - Files to sign: `rclicker.exe` (Windows, Authenticode)
+   - Code signing policy: `https://github.com/camster91/Rclicker#code-signing-policy`
+   - Privacy policy: `https://github.com/camster91/Rclicker/blob/main/docs/privacy.md`
+4. **Wait for approval.** It's free, and they review each project, so this can take a while.
+
+### After approval (about 15 minutes)
+
+In SignPath (https://app.signpath.io):
+
+1. Turn on 2FA for your SignPath account.
+2. Create a **project** with the slug `rclicker`, and link it to the repository `camster91/Rclicker`.
+3. **Trusted build system:** add or link **GitHub.com** to the project. This is what proves each file was built by GitHub Actions.
+4. **Artifact configuration:** paste in [`.signpath/artifact-configuration.xml`](../.signpath/artifact-configuration.xml) and make it the default.
+5. **Signing policy:** use the release-signing policy SignPath Foundation set up for you (for example `release-signing`). Make yourself the approver.
+6. Create a **CI user** (or API token) that may submit signing requests, and copy its token.
+
+In GitHub, open https://github.com/camster91/Rclicker → **Settings → Secrets and variables → Actions**:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Variable | `SIGNPATH_ORGANIZATION_ID` | your SignPath organization ID |
+| Variable | `SIGNPATH_PROJECT_SLUG` | `rclicker` |
+| Variable | `SIGNPATH_SIGNING_POLICY_SLUG` | the signing policy's slug, e.g. `release-signing` |
+| **Secret** | `SIGNPATH_API_TOKEN` | the CI user's API token (keep it secret; only you add this) |
+
+That's it. Each push to `main` then:
+
+1. builds `rclicker.exe` (unsigned) as before;
+2. sends that exact file to SignPath and waits up to **1 hour** for you to approve it (SignPath emails you);
+3. checks the signature and publishes the **signed** file to the release behind https://clicker.rotmanav.ca/download.
+
+If you don't approve in time, or you reject it, nothing is published. Approve, then re-run the failed `sign` job in GitHub Actions.
+
+## Paid: Azure Artifact Signing
+
+Use this instead if you want **your own name** on the signature or no per-release approval. It costs about US$9.99/month (Basic: up to 5,000 signatures, 1 certificate profile). Nothing secret is stored in GitHub: it signs in to Azure with a short-lived token (OIDC).
 
 ### 1. Azure subscription
-1. Go to https://portal.azure.com and sign in (or create a free account; a credit card is required).
+1. Go to https://portal.azure.com and sign in (or create an account; a credit card is required).
 2. If signing as an **individual**, check **Cost Management + Billing → Billing profile**. The account type must be **Individual**, and the legal name and address must match your government ID exactly.
 
 ### 2. Turn on the service
@@ -57,13 +124,13 @@ In https://github.com/camster91/Rclicker → **Settings → Secrets and variable
 | `AZURE_SIGNING_ACCOUNT` | e.g. `rclickersigning` |
 | `AZURE_SIGNING_PROFILE` | `rclicker` |
 
-That's it. The next build on `main` signs `rclicker.exe`, checks the signature, and publishes it to the release behind https://clicker.rotmanav.ca/download.
+The next build on `main` signs `rclicker.exe`, checks the signature, and publishes it to the release behind https://clicker.rotmanav.ca/download.
 
 ## How to check a download is signed
 
-Right-click `rclicker.exe` → **Properties** → **Digital Signatures** tab. It should list your name.
+Right-click `rclicker.exe` → **Properties** → **Digital Signatures** tab. It lists "SignPath Foundation" (free option) or your name (Azure).
 
 ## Notes
 
-- A brand-new certificate may still see a SmartScreen prompt for a short while, until the file has been downloaded enough times to build up a reputation. Signing is what makes that possible.
-- Signing doesn't change how rclicker works; the same build is just stamped with your verified identity.
+- A newly signed app may still get a SmartScreen prompt for a short while, until enough people have downloaded it to build a reputation. Signing is what makes that possible.
+- Signing doesn't change how rclicker works; the same build is just stamped with a verified signature.
