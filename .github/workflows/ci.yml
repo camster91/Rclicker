@@ -14,6 +14,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    outputs:
+      relay: ${{ steps.relay.outputs.set }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -30,7 +32,24 @@ jobs:
       - name: Test
         run: dotnet test RClicker.sln -c Release --no-build --logger "trx;LogFileName=results.trx"
 
+      # The relay address is a repository secret (Settings → Secrets and variables → Actions →
+      # RELAY_URL), so it is built into the app without appearing in the code or the logs.
+      - name: Relay address
+        id: relay
+        shell: bash
+        env:
+          RELAY_URL: ${{ secrets.RELAY_URL }}
+        run: |
+          if [ -n "$RELAY_URL" ]; then
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::The RELAY_URL secret is not set: this build has no relay address and will not be released."
+          fi
+
       - name: Publish win-x64
+        env:
+          RelayUrl: ${{ secrets.RELAY_URL }}
         run: dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -77,7 +96,7 @@ jobs:
   # and the release stays unsigned.
   sign:
     needs: [build, relay]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.relay == 'true'
     permissions:
       contents: read
       id-token: write # Azure sign-in without stored secrets (OIDC)
@@ -95,6 +114,7 @@ jobs:
       always() && github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')) &&
       needs.build.result == 'success' && needs.relay.result == 'success' &&
+      needs.build.outputs.relay == 'true' &&
       (needs.sign.result == 'success' || needs.sign.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -140,7 +160,7 @@ jobs:
             gh release create "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip \
               --target "$GITHUB_SHA" --title "rclicker $version" $flags --notes "$notes"
           fi
-          # Builds from main become the "latest" release that clicker.rotmanav.ca/download serves.
+          # Builds from main become the "latest" release that the website's /download serves.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             gh release edit "$tag" --prerelease=false --latest
           fi

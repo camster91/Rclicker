@@ -34,9 +34,9 @@
         <p class="lead">Run rclicker on the presentation computer, scan the QR code, and move your slides from your phone. It works on office, school and guest Wi-Fi, even when your phone is on mobile data.</p>
         <div class="cta-row">
           <a class="button primary" href="download">Download for Windows</a>
-          <a class="button ghost" href="#how">See how it works</a>
+          <a class="button ghost" href="present">Present a PDF in your browser</a>
         </div>
-        <p class="fine">Windows 10 or 11 · PowerPoint · iPhone or Android</p>
+        <p class="fine">Windows 10 or 11 · PowerPoint · iPhone or Android · Can't install apps? <a href="present">Use the browser version</a></p>
       </div>
 
       <div class="hero-art" aria-hidden="true">
@@ -131,11 +131,11 @@
       </details>
       <details>
         <summary>Windows says it protected my PC. Is that normal?</summary>
-        <p>Yes, for now. rclicker is new and not yet code-signed, so Windows asks before running it. Click <b>More info → Run anyway</b>. If your browser blocks the download, open your downloads list and choose <b>Keep</b>.</p>
+        <p>It can happen for a while with new apps. rclicker is code-signed: check that the publisher says <b>Cameron Ashley</b>, then click <b>More info → Run anyway</b>. If your browser blocks the download, open your downloads list and choose <b>Keep</b>. Can't install anything? <a href="present">Use the browser version</a>.</p>
       </details>
       <details>
         <summary>My company network blocks it. What should I ask IT?</summary>
-        <p>Ask them to allow HTTPS and WebSocket connections to <code>clicker.rotmanav.ca</code> (port 443). Nothing needs to connect into your computer.</p>
+        <p>Ask them to allow HTTPS and WebSocket connections to <code id="site-host">this website's address</code> (port 443). Nothing needs to connect into your computer.</p>
       </details>
       <details>
         <summary>Can someone in the audience take control?</summary>
@@ -143,7 +143,7 @@
       </details>
       <details>
         <summary>Does it work with Google Slides or PDFs?</summary>
-        <p>It's made for PowerPoint. You can untick "Only send keys when PowerPoint is the active window" to use it with other apps that move with the arrow keys.</p>
+        <p>Yes: <a href="present">present any PDF from your browser</a>, with nothing to install. Export your slides as PDF (PowerPoint, Google Slides and Keynote all can), pick the file, and scan the QR code. The PDF stays on your computer. Animations and videos don't play in a PDF; for those, use the Windows app with PowerPoint.</p>
       </details>
     </section>
 
@@ -155,7 +155,7 @@
   </main>
 
   <footer class="footer">
-    <p>rclicker · <a href="https://rotmanav.ca">rotmanav.ca</a> · <a href="https://github.com/camster91/Rclicker">Source on GitHub</a></p>
+    <p>rclicker · <a href="https://github.com/camster91/Rclicker">Source on GitHub</a></p>
   </footer>
 </body>
 </html>

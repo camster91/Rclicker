@@ -1,6 +1,9 @@
 // The website and phone remote, bundled into the Worker (see "rules" in wrangler.jsonc).
 // .js files are stored as .js.txt so the bundler treats them as text, not Worker code.
 import appJs from '../public/app.js.txt';
+import presentCss from '../public/present.css';
+import presentHtml from '../public/present.html';
+import presentJs from '../public/present.js.txt';
 import remoteHtml from '../public/remote.html';
 import siteCss from '../public/site.css';
 import siteHtml from '../public/site.html';
@@ -26,19 +29,28 @@ const PAGE_CSP =
   "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; " +
   "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
+// "Present in the browser" renders PDFs with pdf.js (served same-origin from /vendor/): it needs
+// its Web Worker, canvas images, and fonts that pdf.js loads from the PDF's own data.
+const PRESENT_CSP =
+  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; " +
+  "connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
 const HTML = 'text/html; charset=utf-8';
 const JS = 'text/javascript; charset=utf-8';
 const CSS = 'text/css; charset=utf-8';
 
 // The remote and its scripts are never cached (always the latest security fixes);
 // the marketing page may be cached briefly.
-const FILES: Record<string, { body: string; type: string; cache: string }> = {
+const FILES: Record<string, { body: string; type: string; cache: string; csp?: string }> = {
   '/': { body: siteHtml, type: HTML, cache: 'public, max-age=300' },
   '/site.css': { body: siteCss, type: CSS, cache: 'public, max-age=300' },
   '/site.js': { body: siteJs, type: JS, cache: 'no-store' },
   '/remote': { body: remoteHtml, type: HTML, cache: 'no-store' },
   '/app.js': { body: appJs, type: JS, cache: 'no-store' },
   '/styles.css': { body: stylesCss, type: CSS, cache: 'no-store' },
+  '/present': { body: presentHtml, type: HTML, cache: 'no-store', csp: PRESENT_CSP },
+  '/present.js': { body: presentJs, type: JS, cache: 'no-store' },
+  '/present.css': { body: presentCss, type: CSS, cache: 'no-store' },
 };
 
 /** Serves the whitelisted pages. `path` is relative to where the relay is mounted. Anything else is 404. */
@@ -57,6 +69,6 @@ export function serveAsset(request: Request, path: string): Response {
   }
 
   const headers: Record<string, string> = { 'Content-Type': file.type, 'Cache-Control': file.cache, ...SECURITY_HEADERS };
-  if (file.type === HTML) headers['Content-Security-Policy'] = PAGE_CSP;
+  if (file.type === HTML) headers['Content-Security-Policy'] = file.csp ?? PAGE_CSP;
   return new Response(request.method === 'HEAD' ? null : file.body, { headers });
 }
