@@ -76,7 +76,7 @@ What IT may need to allow:
 
 - `https://clicker.rotmanav.ca`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being switched on (see [Code signing policy](#code-signing-policy)).
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Releases are code-signed by Cameron Ashley (see [Code signing policy](#code-signing-policy)).
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
@@ -99,7 +99,7 @@ No accounts, ads, analytics or tracking cookies. Commands are end-to-end encrypt
 
 `rclicker.exe` is signed with [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (Microsoft), using a certificate for the project owner's verified identity.
 
-**Status:** being switched on. Releases up to 0.2.3 are unsigned; each release's notes say whether it's signed.
+**Status:** on. Releases from 0.2.3 are signed by **Cameron Ashley** (Microsoft ID-verified certificate). Older releases are unsigned.
 
 - Only `rclicker.exe` built by GitHub Actions from this repository's `main` branch is signed. GitHub signs in to Azure with a short-lived token; no signing key or password is stored anywhere.
 - Each build checks the signature before publishing. To check a download, right-click `rclicker.exe` → **Properties** → **Digital Signatures**.
@@ -135,7 +135,7 @@ Setup steps: [docs/code-signing.md](docs/code-signing.md).
 - The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Releases up to 0.2.3 aren't code-signed. Click **More info → Run anyway** if you trust where you got it. Once releases are signed, a brand-new signature can still get this prompt for a while.
+- A newly signed app can still get this prompt for a while, until enough people have downloaded it. Check that **Publisher** says **Cameron Ashley**, then choose **More info → Run anyway**. Versions before 0.2.3 aren't signed; download the latest.
 
 ## Building from source
 

@@ -128,6 +128,12 @@ jobs:
           notes="Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). $signing"
           (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
           if gh release view "$tag" >/dev/null 2>&1; then
+            if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$SIGNED" != "true" ]; then
+              # The owner may have replaced these files with copies signed on their own PC.
+              # Never overwrite a published main release with an unsigned build; bump <Version> to release again.
+              echo "::notice::Release $tag already exists; leaving its files unchanged."
+              exit 0
+            fi
             gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
             gh release edit "$tag" --notes "$notes" # re-runs may change signed/unsigned
           else
