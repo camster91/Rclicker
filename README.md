@@ -76,7 +76,7 @@ What IT may need to allow:
 
 - `https://clicker.rotmanav.ca`.
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Releases from `main` are code-signed (see [Code signing policy](#code-signing-policy)).
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being switched on (see [Code signing policy](#code-signing-policy)).
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
@@ -98,6 +98,8 @@ No accounts, ads, analytics or tracking cookies. Commands are end-to-end encrypt
 ## Code signing policy
 
 `rclicker.exe` is signed with [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (Microsoft), using a certificate for the project owner's verified identity.
+
+**Status:** being switched on. Releases up to 0.2.3 are unsigned; each release's notes say whether it's signed.
 
 - Only `rclicker.exe` built by GitHub Actions from this repository's `main` branch is signed. GitHub signs in to Azure with a short-lived token; no signing key or password is stored anywhere.
 - Each build checks the signature before publishing. To check a download, right-click `rclicker.exe` → **Properties** → **Digital Signatures**.
@@ -133,7 +135,7 @@ Setup steps: [docs/code-signing.md](docs/code-signing.md).
 - The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Versions before 0.2.3 aren't code-signed. Download the latest version. A brand-new signature can still get a SmartScreen prompt for a while; choose **More info → Run anyway** if the publisher shown is the one in [Code signing policy](#code-signing-policy).
+- Releases up to 0.2.3 aren't code-signed. Click **More info → Run anyway** if you trust where you got it. Once releases are signed, a brand-new signature can still get this prompt for a while.
 
 ## Building from source
 

@@ -6,7 +6,7 @@ In order:
 
 1. [#13 Choose an open-source license](https://github.com/camster91/Rclicker/issues/13)
 2. [#17 Account safety: 2-step login on GitHub and Cloudflare](https://github.com/camster91/Rclicker/issues/17)
-3. Code signing: set up with Azure. Check the download after the next `main` build (Properties → Digital Signatures).
+3. Code signing: fill in the six Azure IDs in `.github/workflows/sign-windows.yml` (or send them to Claude), then check the download (Properties → Digital Signatures). See [docs/code-signing.md](docs/code-signing.md).
 4. [#15 Unblock rclicker from the rotmanav.ca login lock](https://github.com/camster91/Rclicker/issues/15)
 5. [#16 Test on a real work PC with PowerPoint](https://github.com/camster91/Rclicker/issues/16)
 
