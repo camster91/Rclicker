@@ -40,7 +40,7 @@ Done in a Linux cloud container. **No Windows PC, no PowerPoint and no physical 
    - Works again after the phone goes offline and back.
    - New session → old phone "Session ended", and the new QR code works. Wrong key → "Session ended".
    - Quit → "rclicker closed". No page errors.
-2. **Live relay (`https://rclicker.cameron-rotman.workers.dev`) + real PC client** through this container's outbound HTTPS proxy, with a protocol-identical phone simulator:
+2. **Live relay (the deployed workers.dev address) + real PC client** through this container's outbound HTTPS proxy, with a protocol-identical phone simulator:
    - All five commands acked "ok" and pressed the right keys.
    - **Round trip about 100 ms.**
    - Second phone 4409, wrong key 4401, New session 4401, keep-alive pong.

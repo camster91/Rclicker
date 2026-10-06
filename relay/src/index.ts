@@ -4,19 +4,20 @@ export { Room } from './room';
 
 const ROOM_ID = /^[A-Za-z0-9_-]{22}$/;
 
-/** rclicker's own origin, so no other site's pages share its cookies, storage or scripts. */
-const HOME = 'https://clicker.rotmanav.ca';
-
 /**
- * Older addresses, with the path the relay was mounted under. Their sockets keep working
- * for apps already installed (0.2.0 used workers.dev, 0.2.1 rotmanav.ca/clicker); every
- * page there redirects to HOME, keeping the path, query and #k= fragment.
+ * Addresses come from the Worker's settings, not from this repository:
+ *   HOME_ORIGIN   rclicker's own origin (e.g. https://clicker.example.com), so no other
+ *                 site's pages share its cookies, storage or scripts.
+ *   LEGACY_HOSTS  JSON object of older addresses → the path the relay was mounted under,
+ *                 e.g. {"example.org": "/clicker", "rclicker.example.workers.dev": ""}.
+ *                 Their sockets keep working for apps already installed; every page there
+ *                 redirects to HOME_ORIGIN, keeping the path, query and #k= fragment.
+ * Without HOME_ORIGIN (local development) every address is treated as home.
  */
-const LEGACY_HOSTS = new Map([
-  ['rotmanav.ca', '/clicker'],
-  ['www.rotmanav.ca', '/clicker'],
-  ['rclicker.cameron-rotman.workers.dev', ''],
-]);
+function legacyHosts(env: Env): Map<string, string> {
+  if (!env.LEGACY_HOSTS) return new Map();
+  return new Map(Object.entries(JSON.parse(env.LEGACY_HOSTS) as Record<string, string>));
+}
 
 const SOCKETS = new Set(['/ws/host', '/ws/phone']);
 
@@ -30,12 +31,12 @@ export default {
     const url = new URL(request.url);
     let path = url.pathname;
 
-    const mount = LEGACY_HOSTS.get(url.hostname);
+    const mount = env.HOME_ORIGIN ? legacyHosts(env).get(url.hostname) : undefined;
     if (mount !== undefined) {
       if (path !== mount && !path.startsWith(`${mount}/`)) return notFound();
       path = path.slice(mount.length) || '/';
       if (!SOCKETS.has(path)) {
-        return new Response(null, { status: 301, headers: { Location: `${HOME}${path}${url.search}`, ...LEGACY_HEADERS } });
+        return new Response(null, { status: 301, headers: { Location: `${env.HOME_ORIGIN}${path}${url.search}`, ...LEGACY_HEADERS } });
       }
     }
 

@@ -102,8 +102,8 @@ describe('present page', () => {
     }
   });
 
-  it('redirects to clicker.rotmanav.ca from the old addresses', async () => {
-    const response = await SELF.fetch('https://rotmanav.ca/clicker/present', { redirect: 'manual' });
-    expect(response.headers.get('Location')).toBe('https://clicker.rotmanav.ca/present');
+  it('redirects to clicker.example.com from the old addresses', async () => {
+    const response = await SELF.fetch('https://example.org/clicker/present', { redirect: 'manual' });
+    expect(response.headers.get('Location')).toBe('https://clicker.example.com/present');
   });
 });
