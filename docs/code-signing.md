@@ -88,6 +88,16 @@ An app registration can hold up to 20 of these.
 
 3. Later jobs download the signed files from the artifact `my-app-win-x64-signed`. `needs.sign.outputs.signed` is `'true'` when they were signed.
 
+## Let a browser agent do it
+
+[signing-browser-agent-prompt.md](signing-browser-agent-prompt.md) is a ready-made prompt for a browser agent (for example Claude in Chrome). It:
+
+- collects the six Azure IDs and fills them in;
+- allows each of your Windows repos in Azure;
+- opens one pull request per repo that connects its build to this workflow.
+
+It never handles secrets or money, and it never merges anything.
+
 ## How to check a download is signed
 
 Right-click the `.exe` → **Properties** → **Digital Signatures** tab. It should list your verified name.
