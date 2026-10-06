@@ -8,7 +8,7 @@ rclicker uses **Azure Artifact Signing** (Microsoft, about US$9.99/month for up 
 - Each repository calls it with a few lines (below).
 - Nothing secret is stored anywhere. GitHub signs in to Azure with a short-lived token (OIDC), and Azure decides which repositories may sign.
 
-Until the six IDs are filled in, the workflow signs nothing, and releases are published unsigned.
+**Status:** set up. The IDs are filled in, and rclicker releases from 0.2.3 are signed by Cameron Ashley. If signing is ever unavailable, CI never replaces an already-published release with an unsigned build.
 
 ## One-time Azure setup (about 30 minutes, plus Microsoft's ID check)
 
