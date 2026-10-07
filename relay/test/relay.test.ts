@@ -1,6 +1,6 @@
 import { SELF, env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { Close, PING, PONG, deviceLabel, randomId, sha256Base64Url } from '../src/protocol';
+import { Close, HOST_GONE_MS, HOST_NOTIFY_MS, PING, PONG, deviceLabel, randomId, sha256Base64Url } from '../src/protocol';
 
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15';
 const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/140.0 Mobile';
@@ -262,6 +262,83 @@ describe('pairing', () => {
     expect(await back.next()).toEqual({ t: 'ready' });
     expect(await back.next()).toMatchObject({ t: 'phone', event: 'join' });
     expect(await p2.next()).toEqual({ t: 'host', online: true });
+  });
+
+  it('notifies after a host disconnect grace period and still permits reclaim', async () => {
+    const r = await newRoom();
+    const { pc, p } = await connected(r);
+    pc.ws.close(1001, 'tab closed without an end message');
+    expect(await p.next()).toEqual({ t: 'host', online: false });
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(r.room));
+    await runInDurableObject(stub, async (_instance, state) => {
+      const info = await state.storage.get<Record<string, unknown>>('info');
+      expect(await state.storage.getAlarm()).toBeLessThanOrEqual(Date.now() + HOST_NOTIFY_MS);
+      await state.storage.put('info', { ...info, hostLeftAt: Date.now() - HOST_NOTIFY_MS - 1 });
+    });
+    await runDurableObjectAlarm(stub);
+    expect(await p.next()).toEqual({ t: 'host', online: false, disconnected: true });
+    await runInDurableObject(stub, async (_instance, state) => {
+      const info = await state.storage.get<Record<string, unknown>>('info');
+      expect(info?.hostOfflineNotified).toBe(true);
+      expect(info?.endedAt).toBeUndefined();
+      expect(await state.storage.getAlarm()).toBeGreaterThan(Date.now() + HOST_NOTIFY_MS);
+    });
+    // Repeated alarms and phone commands must not regress to the waiting status.
+    await runDurableObjectAlarm(stub);
+    p.send({ t: 'msg', iv: IV, ct: CT });
+    expect(await p.next()).toEqual({ t: 'host', online: false, disconnected: true });
+    const back = await host(r);
+    expect(await back.next()).toEqual({ t: 'ready' });
+    expect(await back.next()).toMatchObject({ t: 'phone', event: 'join' });
+    expect(await p.next()).toEqual({ t: 'host', online: true });
+    await runInDurableObject(stub, async (_instance, state) => {
+      const info = await state.storage.get<Record<string, unknown>>('info');
+      expect(info?.hostLeftAt).toBeUndefined();
+      expect(info?.hostOfflineNotified).toBeUndefined();
+    });
+  });
+
+  it('reports disconnect to a returning phone even before the delayed alarm runs', async () => {
+    const r = await newRoom();
+    const { pc, p } = await connected(r);
+    pc.ws.close(1001, 'tab closed');
+    await p.next();
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(r.room));
+    await runInDurableObject(stub, async (_instance, state) => {
+      const info = await state.storage.get<Record<string, unknown>>('info');
+      await state.storage.put('info', { ...info, hostLeftAt: Date.now() - HOST_NOTIFY_MS - 1 });
+    });
+    const returning = await phone(r);
+    expect(await returning.next()).toEqual({ t: 'host', online: false, disconnected: true });
+  });
+
+  it('cancels the disconnect notice when the PC returns during the grace period', async () => {
+    const r = await newRoom();
+    const { pc, p } = await connected(r);
+    pc.ws.close(1001, 'network blip');
+    expect(await p.next()).toEqual({ t: 'host', online: false });
+    const back = await host(r);
+    await back.next();
+    const join = await back.next();
+    expect(await p.next()).toEqual({ t: 'host', online: true });
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(r.room));
+    await runDurableObjectAlarm(stub);
+    back.send({ t: 'msg', pid: join.pid, iv: IV, ct: CT });
+    expect(await p.next()).toEqual({ t: 'msg', iv: IV, ct: CT });
+  });
+
+  it('still ends the room after the existing two-hour host expiry', async () => {
+    const r = await newRoom();
+    const { pc, p } = await connected(r);
+    pc.ws.close(1001, 'offline');
+    await p.next();
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(r.room));
+    await runInDurableObject(stub, async (_instance, state) => {
+      const info = await state.storage.get<Record<string, unknown>>('info');
+      await state.storage.put('info', { ...info, hostLeftAt: Date.now() - HOST_GONE_MS - 1 });
+    });
+    await runDurableObjectAlarm(stub);
+    expect(await p.closed).toBe(Close.ReceiverClosed);
   });
 
   it('answers keep-alive pings', async () => {

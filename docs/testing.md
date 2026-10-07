@@ -23,7 +23,7 @@ Neither suite presses real keys: the presentation controller and key sender are 
 
 ### Relay (`relay/test/relay.test.ts`, vitest + `@cloudflare/vitest-pool-workers`)
 
-Phone page served with security headers and a strict path whitelist; WebSocket only, room id format, cross-origin refused; PC + phone pairing and forwarding both ways; wrong token, unclaimed room and foreign PC refused; PC offline/online notices and reclaim; ping auto-response; busy second phone; same-browser takeover; seat held then released (alarm); New session (4401) and Quit (4410); malformed or hostile messages not forwarded; oversized (1009) and flood (1008) disconnects; unauthenticated sockets time out; WebCrypto derivation and decryption match the Python vectors.
+Phone page served with security headers and a strict path whitelist; WebSocket only, room id format, cross-origin refused; PC + phone pairing and forwarding both ways; wrong token, unclaimed room and foreign PC refused; PC offline/online notices and reclaim; 10-second disconnect notice, returning-phone status, grace-period recovery and two-hour expiry; ping auto-response; busy second phone; same-browser takeover; seat held then released (alarm); New session (4401) and Quit (4410); malformed or hostile messages not forwarded; oversized (1009) and flood (1008) disconnects; unauthenticated sockets time out; WebCrypto derivation and decryption match the Python vectors.
 
 CI (`.github/workflows/ci.yml`) runs both suites, plus the `win-x64` publish on `windows-latest`.
 
@@ -66,3 +66,5 @@ Done in a Linux cloud container. **No Windows PC, no PowerPoint and no physical 
 7. Scan with a second phone: "Another phone is in control".
 8. Click **New session**: the first phone shows "Session ended"; the new QR code works.
 9. Quit: the phone shows "rclicker closed".
+
+The phone-script test executes the shipping script with a minimal DOM and socket transport. It verifies the disconnect label, disabled taps, preserved session and recovery only after a fresh AES-GCM hello. It does not replace real iPhone/Android and projector acceptance.

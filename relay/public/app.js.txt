@@ -250,7 +250,7 @@
           nonce = null;
           clearAckTimers();
         }
-        setState(hostOnline && nonce ? 'connected' : 'waiting');
+        setState(!hostOnline && msg.disconnected === true ? 'disconnected' : (hostOnline && nonce ? 'connected' : 'waiting'));
         break;
       case 'msg':
         if (typeof msg.iv !== 'string' || typeof msg.ct !== 'string') { return; }
@@ -375,6 +375,7 @@
     statusText.textContent = {
       connecting: 'Connecting…',
       waiting: 'Waiting for computer…',
+      disconnected: 'Computer disconnected',
       connected: 'Connected',
       reconnecting: 'Reconnecting…',
       offline: 'Not connected',
