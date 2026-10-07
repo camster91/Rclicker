@@ -1,9 +1,11 @@
 <Project>
   <PropertyGroup>
-    <Version>0.2.2</Version>
+    <Version>0.2.4</Version>
     <Product>rclicker</Product>
     <Company>rclicker</Company>
     <Copyright>Copyright (c) rclicker contributors</Copyright>
+    <!-- Product version is exactly <Version> (no +commit suffix): code signing checks it. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

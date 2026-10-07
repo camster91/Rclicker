@@ -1,0 +1,133 @@
+name: Sign Windows files
+
+# Shared, reusable code signing for all of camster91's repositories (Azure Artifact Signing).
+#
+# How a repository uses it (see docs/code-signing.md, "Use it in another repository"):
+#
+#   sign:
+#     needs: build                     # a job that uploaded the unsigned files as an artifact
+#     permissions:
+#       contents: read
+#       id-token: write                # lets GitHub sign in to Azure without any stored secret
+#     uses: camster91/Rclicker/.github/workflows/sign-windows.yml@main
+#     with:
+#       artifact: my-app-win-x64       # artifact holding the unsigned files
+#
+# It downloads that artifact, signs every .exe/.dll/.msi/.msix in it, checks each signature,
+# and uploads the result as "<artifact>-signed". The output "signed" says whether it signed.
+#
+# The values below are IDs, not secrets. Who may sign is decided in Azure: each repository
+# (and branch) needs a federated credential on the app registration.
+
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: Name of the uploaded artifact that holds the unsigned files.
+        required: true
+        type: string
+      file-types:
+        description: Comma-separated file extensions to sign.
+        required: false
+        type: string
+        default: exe,dll,msi,msix
+    outputs:
+      signed:
+        description: '"true" when the files were signed and verified; "false" when signing is not configured yet.'
+        value: ${{ jobs.sign.outputs.signed }}
+
+permissions: {}
+
+env:
+  # Fill these in once (Azure portal); every repository that calls this workflow uses them.
+  AZURE_TENANT_ID: 'b5bdee55-d9ca-4dff-91f6-1a22445d1710'
+  AZURE_CLIENT_ID: '5933cfcf-1e92-46f9-ba71-226192f71417'
+  AZURE_SUBSCRIPTION_ID: '3a6865fe-4a72-4c30-80f9-8f2645e0d6ea'
+  AZURE_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net'       # e.g. https://eus.codesigning.azure.net
+  AZURE_SIGNING_ACCOUNT: 'rclickersigning'        # e.g. camsterSigning
+  AZURE_SIGNING_PROFILE: 'rclicker'        # certificate profile name
+  AZURE_SIGNING_PUBLISHER: 'Cameron Ashley' # exact verified certificate name
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      signed: ${{ steps.result.outputs.signed }}
+    steps:
+      - name: Check configuration
+        id: config
+        shell: pwsh
+        run: |
+          $missing = @('AZURE_TENANT_ID','AZURE_CLIENT_ID','AZURE_SUBSCRIPTION_ID','AZURE_SIGNING_ENDPOINT','AZURE_SIGNING_ACCOUNT','AZURE_SIGNING_PROFILE','AZURE_SIGNING_PUBLISHER') |
+            Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+          if ($missing) {
+            "::notice::Code signing is not configured yet (missing: $($missing -join ', ')). Files are left unsigned."
+            "configured=false" >> $env:GITHUB_OUTPUT
+          } else {
+            "configured=true" >> $env:GITHUB_OUTPUT
+          }
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.config.outputs.configured == 'true'
+        with:
+          name: ${{ inputs.artifact }}
+          path: files
+
+      - name: Sign in to Azure
+        if: steps.config.outputs.configured == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign
+        if: steps.config.outputs.configured == 'true'
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ env.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.AZURE_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\files
+          files-folder-filter: ${{ inputs.file-types }}
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify signatures
+        if: steps.config.outputs.configured == 'true'
+        shell: pwsh
+        env:
+          FILE_TYPES: ${{ inputs.file-types }}
+          ARTIFACT_NAME: ${{ inputs.artifact }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:AZURE_SIGNING_PUBLISHER)) { throw 'Expected publisher is required.' }
+          $patterns = $env:FILE_TYPES.Split(',') | ForEach-Object { "*.$($_.Trim())" }
+          $files = Get-ChildItem files -Recurse -File -Include $patterns
+          if (-not $files) { throw "No files of types $env:FILE_TYPES found in artifact '$env:ARTIFACT_NAME'." }
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature -LiteralPath $f.FullName
+            "$($f.Name): $($sig.Status) ($($sig.SignerCertificate.Subject))"
+            if ($sig.Status -ne 'Valid') { throw "$($f.Name) signature is $($sig.Status)" }
+            if (-not $sig.TimeStamperCertificate) { throw "$($f.Name) timestamp is missing" }
+            if (-not $sig.SignerCertificate) { throw "$($f.Name) signer certificate is missing" }
+            $publisher = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+            if ($publisher -cne $env:AZURE_SIGNING_PUBLISHER) { throw "$($f.Name) publisher does not match $env:AZURE_SIGNING_PUBLISHER" }
+          }
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.config.outputs.configured == 'true'
+        with:
+          name: ${{ inputs.artifact }}-signed
+          path: files/
+          if-no-files-found: error
+
+      - name: Result
+        id: result
+        shell: pwsh
+        run: '"signed=${{ steps.config.outputs.configured }}" >> $env:GITHUB_OUTPUT'

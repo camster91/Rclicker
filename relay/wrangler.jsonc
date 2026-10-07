@@ -3,14 +3,9 @@
   "name": "rclicker",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-15",
-  // Home: clicker.rotmanav.ca (its own origin). The older addresses, rotmanav.ca/clicker and
-  // workers.dev, keep their sockets for installed apps and redirect pages (see src/index.ts).
+  // Addresses (custom domain, routes, HOME_ORIGIN and LEGACY_HOSTS) are set on the Worker in
+  // the Cloudflare dashboard, not here. Deploy with --keep-vars so they are kept.
   "workers_dev": true,
-  "routes": [
-    { "pattern": "clicker.rotmanav.ca", "custom_domain": true },
-    { "pattern": "rotmanav.ca/clicker*", "zone_name": "rotmanav.ca" },
-    { "pattern": "www.rotmanav.ca/clicker*", "zone_name": "rotmanav.ca" }
-  ],
   // New WebSocket connections per IP address per minute. Pages are static and need no room.
   "ratelimits": [{ "name": "CONNECT_LIMITER", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }],
   // The phone page (public/) is bundled into the Worker as text, so a deploy is one upload.

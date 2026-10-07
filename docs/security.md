@@ -23,7 +23,7 @@ Anyone on the internet can reach the relay. The **session key** in the QR code (
 | Session lifetime | Key in memory only. **New session** ends the room at the relay (old QR codes report "ended"). Quit ends it too. 12 h session / 24 h room hard limit. | `SessionManager`, `room.ts` |
 | Malformed input | Relay: max 2 KB per message, JSON-only, field formats validated, unknown types ignored. PC: decryption must succeed, plaintext ≤ 512 bytes, JSON depth ≤ 4. | `room.ts`, `ControllerProtocol` |
 | Flooding | Relay: at most 60 new connections per minute per IP address (then 429); 20 messages/s per socket (then close 1008); unauthenticated sockets closed after 10 s. PC: duplicate filter plus token bucket. | `index.ts`, `room.ts`, `CommandRateLimiter` |
-| Cross-site use | rclicker has its own origin, `clicker.rotmanav.ca`, so no other site's pages share its storage or scripts. Pages on the old addresses only redirect there. Phone WebSockets must come from the relay's own origin (403 otherwise). | `index.ts` |
+| Cross-site use | rclicker has its own origin (`HOME_ORIGIN`), so no other site's pages share its storage or scripts. Pages on the old addresses only redirect there. Phone WebSockets must come from the relay's own origin (403 otherwise). | `index.ts` |
 | Phone page hardening | Strict CSP (`default-src 'none'`, self-only scripts and connections), `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, HSTS, no external resources. Only 3 whitelisted paths are served; everything else is 404. | `assets.ts` |
 | PC network exposure | **None inbound.** The PC only makes an outbound HTTPS connection; nothing listens on the PC. | `RelayHostClient` |
 | Logs | Only a redacted key prefix (`AbCd…`) is ever logged. | `SessionToken.Redact` |

@@ -27,14 +27,16 @@ rclicker 0.2 has three parts: the Windows app, a small relay on Cloudflare, and 
 
 ## Where it runs
 
-The Cloudflare Worker `rclicker` lives at **https://clicker.rotmanav.ca** (a Workers custom domain), its own origin. The older addresses still reach the same Worker: **rotmanav.ca/clicker** (zone routes `rotmanav.ca/clicker*` and `www.rotmanav.ca/clicker*`) and **rclicker.cameron-rotman.workers.dev**. There, `/ws/host` and `/ws/phone` keep working for apps already installed, and every page redirects (301) to the same path on `clicker.rotmanav.ca`, keeping the `#k=` key.
+The Cloudflare Worker `rclicker` lives on its own origin, a Workers custom domain. Its addresses are Worker settings in the Cloudflare dashboard, not part of this repository: `HOME_ORIGIN` is the home address, and `LEGACY_HOSTS` lists older addresses (zone routes and workers.dev) with the path the relay was mounted under. On those, `/ws/host` and `/ws/phone` keep working for apps already installed, and every page redirects (301) to the same path on `HOME_ORIGIN`, keeping the `#k=` key.
 
-On `clicker.rotmanav.ca`:
+On the home address:
 
 | Path | What |
 | --- | --- |
 | `/` | Marketing page (`public/site.html`). Old QR links with `#k=` are forwarded to `/remote`. |
 | `/remote` | Phone remote (`public/remote.html`, `app.js`, `styles.css`) |
+| `/present` | Present a PDF from a browser, no install (`public/present.html`, `present.js`, `present.css`). The page plays the PC's part: same keys, encryption and freshness checks as `RelayHostClient`, and it shows the PDF with pdf.js instead of pressing keys in PowerPoint. |
+| `/vendor/…` | Third-party browser files for `/present` (pdf.js, a QR encoder). The Worker fetches each from a public npm mirror (jsDelivr, then unpkg) on first use, checks its SHA-384 against `src/vendor-manifest.ts` (made by `scripts/vendor-manifest.mjs`), and serves and caches it from this origin. A file that doesn't match is never served. |
 | `/download` | 302 to the latest GitHub release `rclicker.exe` |
 | `/ws/host`, `/ws/phone` | Relay WebSockets → Durable Object `Room` |
 
@@ -121,4 +123,4 @@ Cloudflare Workers Free plan: 100,000 requests a day, and SQLite-backed Durable 
 
 ## Packaging
 
-`dotnet publish -c Release -r win-x64` produces one self-contained, compressed `rclicker.exe` with the relay address built in (`-p:RelayUrl=…`). The relay deploys with `npx wrangler deploy` from `relay/`.
+`dotnet publish -c Release -r win-x64` produces one self-contained, compressed `rclicker.exe` with the relay address built in (`-p:RelayUrl=…`; CI takes it from the `RELAY_URL` secret). The relay deploys with `npx wrangler deploy --keep-vars` from `relay/`.
