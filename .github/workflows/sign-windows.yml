@@ -78,7 +78,7 @@ jobs:
 
       - name: Sign in to Azure
         if: steps.config.outputs.configured == 'true'
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
@@ -120,7 +120,7 @@ jobs:
             if ($publisher -cne $env:AZURE_SIGNING_PUBLISHER) { throw "$($f.Name) publisher does not match $env:AZURE_SIGNING_PUBLISHER" }
           }
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.config.outputs.configured == 'true'
         with:
           name: ${{ inputs.artifact }}-signed

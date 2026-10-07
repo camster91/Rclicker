@@ -58,6 +58,8 @@ In [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml)
 
 Or send them to Claude to fill in. The next build of rclicker's `main` branch then signs `rclicker.exe`, checks the signature, and publishes it.
 
+A manual **Actions → CI → Run workflow** run from `main` builds, signs and verifies the downloadable workflow artifact. It does not update the public release; release publishing remains limited to pushes.
+
 ## Allow a repository
 
 Each repository (and branch) that signs needs one entry in Azure. This is what stops other people's repositories from using your certificate.
@@ -65,7 +67,8 @@ Each repository (and branch) that signs needs one entry in Azure. This is what s
 1. Open **Microsoft Entra ID → App registrations → `github-code-signing` → Certificates & secrets → Federated credentials → Add credential**.
 2. Scenario: **GitHub Actions deploying Azure resources**.
 3. Organization: `camster91`. Repository: for example `Rclicker`. Entity type: **Branch**. Branch: `main`.
-4. Name it after the repository, then click **Add**.
+4. Verify the subject matches this repository's current OIDC configuration before adding it. Rclicker's immutable subject is `repo:camster91@33962910/Rclicker@1401803716:ref:refs/heads/main`, with issuer `https://token.actions.githubusercontent.com` and audience `api://AzureADTokenExchange`. Check `gh api repos/camster91/Rclicker/actions/oidc/customization/sub` if settings change.
+5. Name it after the repository, then click **Add**.
 
 An app registration can hold up to 20 of these.
 
