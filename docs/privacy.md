@@ -10,7 +10,7 @@ rclicker is a presentation remote: a Windows app (`rclicker.exe`) and a phone we
 
 ## What leaves your devices
 
-rclicker only connects to its relay, `clicker.rotmanav.ca`, which runs on Cloudflare. It connects there only while the app is open, or while the phone page is open.
+rclicker only connects to its relay (the rclicker website's address), which runs on Cloudflare. It connects there only while the app is open, or while the phone page is open.
 
 | Data | Sent by | Why | Kept |
 | --- | --- | --- | --- |
@@ -29,10 +29,11 @@ rclicker only connects to its relay, `clicker.rotmanav.ca`, which runs on Cloudf
 
 - **PC:** rclicker doesn't install anything, change system settings or write files. Its session key exists only in memory and is gone when you quit. To uninstall, delete `rclicker.exe`.
 - **Phone:** the browser keeps the random browser id described above. Clear the site's data to remove it.
+- **Browser version (`/present`):** the PDF you choose is opened inside your browser and is never uploaded or sent anywhere. The session key exists only in that tab and is gone when you close it. The page's helper libraries (pdf.js and a QR encoder) are loaded from the rclicker website itself. The relay downloads them once from a public package mirror and checks each file's fingerprint first, so your browser never contacts those mirrors.
 
 ## The download
 
-`clicker.rotmanav.ca/download` and the README link point to GitHub Releases. GitHub's [privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) applies to downloads from there.
+The website's `/download` and the README link point to GitHub Releases. GitHub's [privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) applies to downloads from there.
 
 ## Questions
 

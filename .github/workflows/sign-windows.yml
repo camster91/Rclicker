@@ -40,12 +40,13 @@ permissions: {}
 
 env:
   # Fill these in once (Azure portal); every repository that calls this workflow uses them.
-  AZURE_TENANT_ID: ''
-  AZURE_CLIENT_ID: ''
-  AZURE_SUBSCRIPTION_ID: ''
-  AZURE_SIGNING_ENDPOINT: ''       # e.g. https://eus.codesigning.azure.net
-  AZURE_SIGNING_ACCOUNT: ''        # e.g. camsterSigning
-  AZURE_SIGNING_PROFILE: ''        # certificate profile name
+  AZURE_TENANT_ID: 'b5bdee55-d9ca-4dff-91f6-1a22445d1710'
+  AZURE_CLIENT_ID: '5933cfcf-1e92-46f9-ba71-226192f71417'
+  AZURE_SUBSCRIPTION_ID: '3a6865fe-4a72-4c30-80f9-8f2645e0d6ea'
+  AZURE_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net'       # e.g. https://eus.codesigning.azure.net
+  AZURE_SIGNING_ACCOUNT: 'rclickersigning'        # e.g. camsterSigning
+  AZURE_SIGNING_PROFILE: 'rclicker'        # certificate profile name
+  AZURE_SIGNING_PUBLISHER: 'Cameron Ashley' # exact verified certificate name
 
 jobs:
   sign:
@@ -60,7 +61,7 @@ jobs:
         id: config
         shell: pwsh
         run: |
-          $missing = @('AZURE_TENANT_ID','AZURE_CLIENT_ID','AZURE_SUBSCRIPTION_ID','AZURE_SIGNING_ENDPOINT','AZURE_SIGNING_ACCOUNT','AZURE_SIGNING_PROFILE') |
+          $missing = @('AZURE_TENANT_ID','AZURE_CLIENT_ID','AZURE_SUBSCRIPTION_ID','AZURE_SIGNING_ENDPOINT','AZURE_SIGNING_ACCOUNT','AZURE_SIGNING_PROFILE','AZURE_SIGNING_PUBLISHER') |
             Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
           if ($missing) {
             "::notice::Code signing is not configured yet (missing: $($missing -join ', ')). Files are left unsigned."
@@ -102,14 +103,21 @@ jobs:
         shell: pwsh
         env:
           FILE_TYPES: ${{ inputs.file-types }}
+          ARTIFACT_NAME: ${{ inputs.artifact }}
         run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:AZURE_SIGNING_PUBLISHER)) { throw 'Expected publisher is required.' }
           $patterns = $env:FILE_TYPES.Split(',') | ForEach-Object { "*.$($_.Trim())" }
           $files = Get-ChildItem files -Recurse -File -Include $patterns
-          if (-not $files) { throw "No files of types $env:FILE_TYPES found in artifact '${{ inputs.artifact }}'." }
+          if (-not $files) { throw "No files of types $env:FILE_TYPES found in artifact '$env:ARTIFACT_NAME'." }
           foreach ($f in $files) {
-            $sig = Get-AuthenticodeSignature $f.FullName
+            $sig = Get-AuthenticodeSignature -LiteralPath $f.FullName
             "$($f.Name): $($sig.Status) ($($sig.SignerCertificate.Subject))"
             if ($sig.Status -ne 'Valid') { throw "$($f.Name) signature is $($sig.Status)" }
+            if (-not $sig.TimeStamperCertificate) { throw "$($f.Name) timestamp is missing" }
+            if (-not $sig.SignerCertificate) { throw "$($f.Name) signer certificate is missing" }
+            $publisher = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+            if ($publisher -cne $env:AZURE_SIGNING_PUBLISHER) { throw "$($f.Name) publisher does not match $env:AZURE_SIGNING_PUBLISHER" }
           }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

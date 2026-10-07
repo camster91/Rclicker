@@ -14,12 +14,18 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    outputs:
+      relay: ${{ steps.relay.outputs.set }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+
+      - name: Test shared signature verification
+        shell: pwsh
+        run: ./tools/test-signature-verification.ps1
 
       - name: Restore
         run: dotnet restore RClicker.sln
@@ -30,7 +36,24 @@ jobs:
       - name: Test
         run: dotnet test RClicker.sln -c Release --no-build --logger "trx;LogFileName=results.trx"
 
+      # The relay address is a repository secret (Settings → Secrets and variables → Actions →
+      # RELAY_URL), so it is built into the app without appearing in the code or the logs.
+      - name: Relay address
+        id: relay
+        shell: bash
+        env:
+          RELAY_URL: ${{ secrets.RELAY_URL }}
+        run: |
+          if [ -n "$RELAY_URL" ]; then
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::The RELAY_URL secret is not set: this build has no relay address and will not be released."
+          fi
+
       - name: Publish win-x64
+        env:
+          RelayUrl: ${{ secrets.RELAY_URL }}
         run: dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -77,7 +100,7 @@ jobs:
   # and the release stays unsigned.
   sign:
     needs: [build, relay]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.relay == 'true'
     permissions:
       contents: read
       id-token: write # Azure sign-in without stored secrets (OIDC)
@@ -95,6 +118,7 @@ jobs:
       always() && github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')) &&
       needs.build.result == 'success' && needs.relay.result == 'success' &&
+      needs.build.outputs.relay == 'true' &&
       (needs.sign.result == 'success' || needs.sign.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -128,13 +152,19 @@ jobs:
           notes="Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). $signing"
           (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
           if gh release view "$tag" >/dev/null 2>&1; then
+            if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$SIGNED" != "true" ]; then
+              # The owner may have replaced these files with copies signed on their own PC.
+              # Never overwrite a published main release with an unsigned build; bump <Version> to release again.
+              echo "::notice::Release $tag already exists; leaving its files unchanged."
+              exit 0
+            fi
             gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
             gh release edit "$tag" --notes "$notes" # re-runs may change signed/unsigned
           else
             gh release create "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip \
               --target "$GITHUB_SHA" --title "rclicker $version" $flags --notes "$notes"
           fi
-          # Builds from main become the "latest" release that clicker.rotmanav.ca/download serves.
+          # Builds from main become the "latest" release that the website's /download serves.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             gh release edit "$tag" --prerelease=false --latest
           fi
