@@ -23,6 +23,10 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Test shared signature verification
+        shell: pwsh
+        run: ./tools/test-signature-verification.ps1
+
       - name: Restore
         run: dotnet restore RClicker.sln
 
