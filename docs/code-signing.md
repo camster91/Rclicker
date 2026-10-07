@@ -4,7 +4,7 @@ Signing `rclicker.exe` tells Windows who made it. That stops the "unknown publis
 
 rclicker uses **Azure Artifact Signing** (Microsoft, about US$9.99/month for up to 5,000 signatures). One Azure account signs builds from **all** your repositories through one shared workflow:
 
-- [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml) holds the signing steps and the six Azure IDs.
+- [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml) holds the signing steps and the Azure IDs and expected publisher.
 - Each repository calls it with a few lines (below).
 - Nothing secret is stored anywhere. GitHub signs in to Azure with a short-lived token (OIDC), and Azure decides which repositories may sign.
 
@@ -43,7 +43,7 @@ rclicker uses **Azure Artifact Signing** (Microsoft, about US$9.99/month for up 
 3. In the signing account, go to **Access control (IAM) → Add role assignment**. Give the app `github-code-signing` the role **Artifact Signing Certificate Profile Signer**.
 4. Allow each repository that should sign; see [Allow a repository](#allow-a-repository). Start with `Rclicker`.
 
-### 7. Fill in the six IDs (once, for all repositories)
+### 7. Fill in the IDs and publisher (once, for all repositories)
 In [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml), fill in the `env:` block. These are IDs, not secrets:
 
 | Name | Value |
@@ -54,6 +54,7 @@ In [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml)
 | `AZURE_SIGNING_ENDPOINT` | e.g. `https://eus.codesigning.azure.net` |
 | `AZURE_SIGNING_ACCOUNT` | e.g. `camsterSigning` |
 | `AZURE_SIGNING_PROFILE` | e.g. `camster` |
+| `AZURE_SIGNING_PUBLISHER` | Exact verified certificate name, currently `Cameron Ashley` |
 
 Or send them to Claude to fill in. The next build of rclicker's `main` branch then signs `rclicker.exe`, checks the signature, and publishes it.
 
@@ -97,6 +98,8 @@ An app registration can hold up to 20 of these.
 - opens one pull request per repo that connects its build to this workflow.
 
 It never handles secrets or money, and it never merges anything.
+
+The shared workflow rejects any selected file without a valid Authenticode signature, a timestamp, or the exact expected publisher name. Windows CI exercises these rejection paths with synthetic signatures before packaging.
 
 ## How to check a download is signed
 
