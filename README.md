@@ -16,7 +16,7 @@ Both the phone and the PC make **outgoing** HTTPS connections (port 443) to a sm
 
 **Download: [rclicker.exe](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe)** (latest release, Windows 10/11). All releases: https://github.com/camster91/Rclicker/releases
 
-Website and relay: **https://clicker.rotmanav.ca** (built into the app; `/download` there points to the same file). The older addresses (`rotmanav.ca/clicker`, `rclicker.cameron-rotman.workers.dev`) redirect there, and apps already installed keep connecting through them.
+The rclicker website runs on the same relay; its address is built into the app, and `/download` there points to the same file. Older addresses redirect there, and apps already installed keep connecting through them.
 
 ## How to run
 
@@ -39,6 +39,16 @@ Closing the rclicker window ends the session immediately. The phone shows "rclic
 - **Phone:** stays awake while connected (the page shows "Screen stays on while connected"). On some phones this starts after your first tap.
 - **PC:** won't dim or go to sleep while a phone is connected.
 
+### No install: present a PDF from the browser
+
+On a PC where you can't install anything, open **/present** on the rclicker website in Chrome, Edge, Firefox or Safari:
+
+1. Export your slides as **PDF** (PowerPoint: File → Export; Google Slides: File → Download; Keynote: File → Export To).
+2. **Choose the PDF** on the page. It's opened in the browser and never uploaded.
+3. **Scan the QR code** with your phone, then click **Start presenting** (full screen).
+
+The phone buttons work the same: Next, Previous, Start (back to slide 1), Black, and End (leave the show). On the PC you can also use the arrow keys, **B** (black), **F** (full screen) and **Esc** (stop). A PDF shows each slide's final state, so animations, transitions and videos don't play; use the Windows app for those.
+
 ### Desktop window
 
 - **QR code + link**: what the phone opens. The QR code hides itself while a phone is connected, so the audience can't scan it off the projector (click **Show QR code** to see it again).
@@ -60,7 +70,7 @@ rclicker.exe [--relay https://<relay address>] [--console]
 
 - Windows 10 (1809) or later, or Windows 11. x64 (an ARM64 build is also produced).
 - Microsoft PowerPoint (desktop app).
-- **Internet access on the PC.** Outgoing HTTPS to `clicker.rotmanav.ca` must be allowed.
+- **Internet access on the PC.** Outgoing HTTPS to the relay must be allowed.
 - A phone with a modern browser (iPhone Safari, Android Chrome) and any internet connection.
 - Nothing else to install. The `.exe` contains the .NET runtime.
 
@@ -74,15 +84,15 @@ rclicker is built to get through typical corporate networks:
 
 What IT may need to allow:
 
-- `https://clicker.rotmanav.ca`.
+- The relay's address: the one in the phone link the app shows (its website's FAQ lists it too).
 - **WebSockets** to that address. Some proxies allow web pages but block WebSocket upgrades.
-- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Code signing is being set up (see [docs/code-signing.md](docs/code-signing.md)).
+- Running `rclicker.exe` itself. Some companies only allow signed or approved programs. Releases are code-signed by Cameron Ashley (see [Code signing policy](#code-signing-policy)).
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
 ## Security
 
-- Each session has a **random 256-bit key**. It's in the QR code link (`…/clicker/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
+- Each session has a **random 256-bit key**. It's in the QR code link (`…/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
 - From that key, the phone and the PC derive an **encryption key** (AES-256-GCM) that only they have. Every command and reply is encrypted. Commands also carry a one-time challenge and a counter, so recorded messages can't be replayed.
 - The relay only gets a room number and a **hash** of a phone pass, so it can tell which phone may join without being able to join itself.
 - Only **one phone controls at a time**. A second phone is told "Another phone is in control".
@@ -90,6 +100,24 @@ If IT can only allow a company-owned domain, the relay can also run on your own 
 - Keys exist only in memory. **New session**, closing the app, or 12 hours makes the old QR code useless.
 
 Details: [docs/security.md](docs/security.md).
+
+## Privacy
+
+No accounts, ads, analytics or tracking cookies. Commands are end-to-end encrypted. The relay keeps only what it needs to pair one phone with one PC, and deletes it within about two days at most. Full policy: [docs/privacy.md](docs/privacy.md).
+
+## Code signing policy
+
+`rclicker.exe` is signed with [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (Microsoft), using a certificate for the project owner's verified identity.
+
+**Status:** on. Releases from 0.2.3 are signed by **Cameron Ashley** (Microsoft ID-verified certificate). Older releases are unsigned.
+
+- Only `rclicker.exe` built by GitHub Actions from this repository's `main` branch is signed. GitHub signs in to Azure with a short-lived token; no signing key or password is stored anywhere.
+- Each build checks the signature before publishing. To check a download, right-click `rclicker.exe` → **Properties** → **Digital Signatures**.
+- Committers and reviewers: [@camster91](https://github.com/camster91)
+- Approvers: [@camster91](https://github.com/camster91)
+- Privacy: [docs/privacy.md](docs/privacy.md). rclicker only talks to its relay to connect your phone and PC; it sends nothing else anywhere.
+
+Setup steps: [docs/code-signing.md](docs/code-signing.md).
 
 ## Troubleshooting
 
@@ -117,7 +145,7 @@ Details: [docs/security.md](docs/security.md).
 - The QR code was replaced (New session), expired, or the app was restarted. Scan the QR code on the computer again.
 
 **Windows SmartScreen warns about the app**
-- Version 0.2.x isn't code-signed. Click **More info → Run anyway** if you trust where you got it.
+- A newly signed app can still get this prompt for a while, until enough people have downloaded it. Check that **Publisher** says **Cameron Ashley**, then choose **More info → Run anyway**. Versions before 0.2.3 aren't signed; download the latest.
 
 ## Building from source
 
@@ -128,7 +156,7 @@ dotnet test RClicker.sln -c Release
 dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 ```
 
-This produces one self-contained `rclicker.exe` (about 60 MB). Use `-r win-arm64` for ARM64 Windows. Add `-p:RelayUrl=https://<your relay>` to build in a different relay.
+This produces one self-contained `rclicker.exe` (about 60 MB). Use `-r win-arm64` for ARM64 Windows. Add `-p:RelayUrl=https://<your relay>` to build in a relay address (official builds get it from the `RELAY_URL` repository secret); without one, the app needs `--relay`.
 
 Relay (needs Node.js 20+):
 
@@ -160,7 +188,7 @@ npx wrangler login      # or set CLOUDFLARE_API_TOKEN
 npx wrangler deploy     # prints https://rclicker.<your-subdomain>.workers.dev
 ```
 
-Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <that address>`. For a company domain, add a [Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) to the Worker in the Cloudflare dashboard.
+Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <that address>`. For a company domain, add a [Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) to the Worker in the Cloudflare dashboard, and set the Worker's `HOME_ORIGIN` variable to it (plus `LEGACY_HOSTS` for any older addresses; see `relay/src/index.ts`). Later deploys need `--keep-vars` so those settings stay.
 
 ## Roadmap (not in 0.2)
 
@@ -170,3 +198,7 @@ Then build the app with `-p:RelayUrl=<that address>`, or run it with `--relay <t
 - Presenter notes, slide preview, timer
 - Laser pointer / pointer mode
 - Managed classroom deployment
+
+## License
+
+[MIT](LICENSE). Free to use, change and share; keep the copyright notice.

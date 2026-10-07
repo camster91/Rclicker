@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="referrer" content="no-referrer">
+  <title>rclicker · Present from this browser</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="present.css">
+  <script type="module" src="present.js"></script>
+</head>
+<body>
+  <main id="setup" class="setup">
+    <header class="top">
+      <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▶</span> rclicker</a>
+      <span class="top-note">Present from this browser · nothing to install</span>
+    </header>
+
+    <section id="step-file" class="card" aria-labelledby="file-title">
+      <h1 id="file-title">Present a PDF from this browser</h1>
+      <p class="lead">Pick a PDF of your slides, scan the QR code with your phone, and move the slides from your phone. The file stays on this computer; it is never uploaded.</p>
+      <label id="drop" class="drop">
+        <input id="file" type="file" accept="application/pdf,.pdf">
+        <span class="drop-big">Choose a PDF</span>
+        <span class="drop-small">or drop it here</span>
+      </label>
+      <p id="file-error" class="error" role="alert"></p>
+      <details class="howto">
+        <summary>How do I get a PDF of my slides?</summary>
+        <ul>
+          <li><strong>PowerPoint:</strong> File → Export → Create PDF/XPS.</li>
+          <li><strong>Google Slides:</strong> File → Download → PDF document.</li>
+          <li><strong>Keynote:</strong> File → Export To → PDF.</li>
+        </ul>
+        <p>A PDF shows each slide as it looks at the end: animations, transitions and videos don't play. For those, use the <a href="./">rclicker app for Windows</a>.</p>
+      </details>
+    </section>
+
+    <section id="step-connect" class="card connect" hidden aria-labelledby="connect-title">
+      <div class="qr-wrap">
+        <canvas id="qr" width="264" height="264" role="img" aria-label="QR code for the phone remote"></canvas>
+      </div>
+      <div class="connect-text">
+        <h1 id="connect-title">Scan with your phone</h1>
+        <p class="status"><span id="status-dot" class="dot" data-state="connecting"></span><span id="status-text">Connecting…</span></p>
+        <p id="deck" class="deck"></p>
+        <div class="actions">
+          <button id="start" class="button primary" type="button">Start presenting</button>
+          <button id="change-file" class="button ghost" type="button">Choose another PDF</button>
+          <button id="new-session" class="button ghost" type="button">New QR code</button>
+        </div>
+        <p class="keys">Keyboard: <kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>B</kbd> black screen · <kbd>F</kbd> full screen · <kbd>Esc</kbd> stop</p>
+        <p id="notice" class="notice" role="status"></p>
+      </div>
+    </section>
+
+    <p class="fine">One phone controls the slides at a time. Commands are end-to-end encrypted. Keep this tab open while you present.</p>
+  </main>
+
+  <div id="stage" class="stage" hidden>
+    <div id="slide" class="slide"></div>
+    <div id="black" class="black" hidden></div>
+    <div id="hud" class="hud" aria-live="polite">
+      <span id="hud-phone" class="dot" data-state="connecting"></span>
+      <span id="hud-page"></span>
+    </div>
+  </div>
+</body>
+</html>
