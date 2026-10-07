@@ -120,7 +120,7 @@ jobs:
             if ($publisher -cne $env:AZURE_SIGNING_PUBLISHER) { throw "$($f.Name) publisher does not match $env:AZURE_SIGNING_PUBLISHER" }
           }
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.config.outputs.configured == 'true'
         with:
           name: ${{ inputs.artifact }}-signed
