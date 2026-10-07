@@ -106,7 +106,7 @@ The phone only knows *intent* (`presentation.next`), never *how* it's done (Righ
 - A dropped phone keeps its seat for **30 s**; the PC shows "Reconnecting…".
 - **New session**: the PC sends `{t:"end"}`, the phone gets **4401**, and the room is marked ended (old QR codes say "Session ended").
 - **Quit**: phone gets **4410** ("rclicker closed").
-- PC offline: the phone shows "Waiting for computer…". After 2 hours the room ends.
+- PC offline: the phone shows "Waiting for computer…" during a 10-second grace period, then "Computer disconnected" with controls disabled. The same PC can reclaim the session; after 2 hours offline the room ends. The relay's stored alarm drives the notice even if the PC tab cannot send a final message.
 - Room hard limit: 24 hours (the PC regenerates sessions every 12 hours anyway).
 
 ## PC connection handling

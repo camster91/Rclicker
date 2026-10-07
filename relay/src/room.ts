@@ -4,6 +4,7 @@ import {
   CLIENT_ID,
   Close,
   HOST_GONE_MS,
+  HOST_NOTIFY_MS,
   MAX_MESSAGES_PER_SECOND,
   MAX_MESSAGE_CHARS,
   MAX_ROOM_MS,
@@ -41,6 +42,7 @@ interface RoomInfo {
   phoneAuthHash: string;
   createdAt: number;
   hostLeftAt?: number;
+  hostOfflineNotified?: boolean;
   endedAt?: number;
 }
 
@@ -61,7 +63,7 @@ type Message = Record<string, unknown> & { t: string };
  *   PC    → relay  {t:"claim", v:1, hostKey, phoneAuthHash} first, then {t:"msg", pid, iv, ct} | {t:"end", reason}
  *   relay → PC     {t:"ready"} | {t:"phone", event:"join"|"leave"|"released", pid, label, held?} | {t:"msg", pid, iv, ct}
  *   phone → relay  {t:"auth", token, client} first, then {t:"msg", iv, ct}
- *   relay → phone  {t:"host", online} | {t:"msg", iv, ct}
+ *   relay → phone  {t:"host", online, disconnected?} | {t:"msg", iv, ct}
  *   either         {"t":"ping"} → {"t":"pong"} (answered by the runtime)
  * iv/ct are AES-GCM payloads the relay cannot read.
  */
@@ -120,7 +122,7 @@ export class Room extends DurableObject<Env> {
         await this.onHostMessage(ws, msg);
         break;
       case 'phone':
-        this.onPhoneMessage(att, ws, msg);
+        await this.onPhoneMessage(att, ws, msg);
         break;
     }
   }
@@ -159,6 +161,10 @@ export class Room extends DurableObject<Env> {
         await this.endRoom(info, Close.SessionEnded, 'session expired');
       } else if (info.hostLeftAt !== undefined && this.sockets('host').length === 0 && now - info.hostLeftAt >= HOST_GONE_MS) {
         await this.endRoom(info, Close.ReceiverClosed, 'computer offline');
+      } else if (info.hostLeftAt !== undefined && !info.hostOfflineNotified && this.sockets('host').length === 0 && now - info.hostLeftAt >= HOST_NOTIFY_MS) {
+        this.sendToPhones({ t: 'host', online: false, disconnected: true });
+        info.hostOfflineNotified = true;
+        await this.ctx.storage.put('info', info);
       }
     }
 
@@ -187,6 +193,7 @@ export class Room extends DurableObject<Env> {
 
     info ??= { hostKeyHash, phoneAuthHash: msg.phoneAuthHash, createdAt: Date.now() };
     delete info.hostLeftAt;
+    delete info.hostOfflineNotified;
     await this.ctx.storage.put('info', info);
 
     for (const other of this.sockets('host')) {
@@ -267,16 +274,16 @@ export class Room extends DurableObject<Env> {
     ws.serializeAttachment(att);
     await this.ctx.storage.delete('seat');
 
-    send(ws, { t: 'host', online: this.sockets('host').length > 0 });
+    send(ws, hostStatus(info, this.sockets('host').length > 0));
     this.sendToHost({ t: 'phone', event: 'join', pid: att.pid, label: att.label });
     await this.reschedule();
   }
 
-  private onPhoneMessage(att: Attachment, ws: WebSocket, msg: Message): void {
+  private async onPhoneMessage(att: Attachment, ws: WebSocket, msg: Message): Promise<void> {
     if (msg.t !== 'msg' || !isIv(msg.iv) || !isCiphertext(msg.ct)) return;
     const host = this.sockets('host')[0];
     if (!host) {
-      send(ws, { t: 'host', online: false });
+      send(ws, hostStatus(await this.ctx.storage.get<RoomInfo>('info'), false));
       return;
     }
 
@@ -300,6 +307,7 @@ export class Room extends DurableObject<Env> {
       const info = await this.ctx.storage.get<RoomInfo>('info');
       if (info && info.endedAt === undefined) {
         info.hostLeftAt = Date.now();
+        delete info.hostOfflineNotified;
         await this.ctx.storage.put('info', info);
         this.sendToPhones({ t: 'host', online: false });
       }
@@ -340,7 +348,10 @@ export class Room extends DurableObject<Env> {
         deadlines.push(info.endedAt + TOMBSTONE_MS);
       } else {
         deadlines.push(info.createdAt + MAX_ROOM_MS);
-        if (info.hostLeftAt !== undefined) deadlines.push(info.hostLeftAt + HOST_GONE_MS);
+        if (info.hostLeftAt !== undefined) {
+          deadlines.push(info.hostLeftAt + HOST_GONE_MS);
+          if (!info.hostOfflineNotified) deadlines.push(info.hostLeftAt + HOST_NOTIFY_MS);
+        }
       }
     }
 
@@ -373,6 +384,11 @@ export class Room extends DurableObject<Env> {
       // Already closed.
     }
   }
+}
+
+function hostStatus(info: RoomInfo | undefined, online: boolean): object {
+  const disconnected = !online && info?.hostLeftAt !== undefined && Date.now() - info.hostLeftAt >= HOST_NOTIFY_MS;
+  return disconnected ? { t: 'host', online: false, disconnected: true } : { t: 'host', online };
 }
 
 function attachmentOf(ws: WebSocket): Attachment {

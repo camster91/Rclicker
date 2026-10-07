@@ -26,6 +26,8 @@ export const MAX_MESSAGES_PER_SECOND = 20;
 export const AUTH_TIMEOUT_MS = 10_000;
 /** A phone that drops keeps its seat this long (screen lock, network blip). */
 export const SEAT_GRACE_MS = 30_000;
+/** Show a definite disconnect after a short blip, without preventing PC reclaim. */
+export const HOST_NOTIFY_MS = 10_000;
 /** If the PC stays offline this long, the room ends. */
 export const HOST_GONE_MS = 2 * 60 * 60 * 1000;
 /** Hard limit on a room's life, matching the PC's 12 h session lifetime with margin. */
