@@ -6,6 +6,10 @@ Turn your phone into a PowerPoint clicker. No app to install on the phone, and i
 2. Scan the QR code it shows with your phone's camera.
 3. Tap **Next**, **Previous**, **Start**, **Black** or **End**.
 
+**Download: [rclicker.exe](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe)** (latest release, Windows 10/11). All releases: https://github.com/camster91/Rclicker/releases
+
+Originally built for presenters working with the Rotman AV team (University of Toronto), where guest devices and room PCs usually sit on different networks.
+
 ## How it works
 
 ```
@@ -13,8 +17,6 @@ Phone (mobile data or any Wi-Fi)  ──HTTPS──▶  rclicker relay (Cloudfla
 ```
 
 Both the phone and the PC make **outgoing** HTTPS connections (port 443) to a small relay on Cloudflare. Nothing connects *into* the PC, so there's no firewall prompt and no need for the two devices to share a network. Commands are **end-to-end encrypted**: the relay passes them along but can't read or fake them.
-
-**Download: [rclicker.exe](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe)** (latest release, Windows 10/11). All releases: https://github.com/camster91/Rclicker/releases
 
 The rclicker website runs on the same relay; its address is built into the app, and `/download` there points to the same file. Older addresses redirect there, and apps already installed keep connecting through them.
 
@@ -147,6 +149,13 @@ Setup steps: [docs/code-signing.md](docs/code-signing.md).
 **Windows SmartScreen warns about the app**
 - A newly signed app can still get this prompt for a while, until enough people have downloaded it. Check that **Publisher** says **Cameron Ashley**, then choose **More info → Run anyway**. Versions before 0.2.3 aren't signed; download the latest.
 
+## Tech stack
+
+- Windows app: C# on .NET 10, WinForms, Win32 keyboard control and foreground-window checks.
+- Relay: TypeScript on Cloudflare Workers, with a Durable Object per room.
+- Phone page: HTML, CSS and JavaScript using WebCrypto; the browser PDF presenter uses the same relay.
+- Tests: xUnit for the desktop core and Vitest in the Workers runtime for the relay. [Architecture](docs/architecture.md) and [testing guide](docs/testing.md).
+
 ## Building from source
 
 Windows app (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
@@ -158,12 +167,13 @@ dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/p
 
 This produces one self-contained `rclicker.exe` (about 60 MB). Use `-r win-arm64` for ARM64 Windows. Add `-p:RelayUrl=https://<your relay>` to build in a relay address (official builds get it from the `RELAY_URL` repository secret); without one, the app needs `--relay`.
 
-Relay (needs Node.js 20+):
+Relay (use Node.js 22, as tested in CI):
 
 ```bash
 cd relay
 npm ci
 npm test          # runs inside the real Workers runtime (Miniflare)
+npm run typecheck
 npm run dev       # local relay on http://localhost:8787; run rclicker.exe --relay http://localhost:8787
 ```
 
