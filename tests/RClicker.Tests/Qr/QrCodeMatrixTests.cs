@@ -86,7 +86,10 @@ public class QrCodeMatrixTests
         }
 
         var source = new RGBLuminanceSource(pixels, size, size, RGBLuminanceSource.BitmapFormat.Gray8);
-        var result = new QRCodeReader().decode(new BinaryBitmap(new HybridBinarizer(source)));
+        // Generated module matrices need no camera-style finder-pattern detection.
+        var result = new QRCodeReader().decode(
+            new BinaryBitmap(new HybridBinarizer(source)),
+            new Dictionary<DecodeHintType, object> { [DecodeHintType.PURE_BARCODE] = true });
         Assert.NotNull(result);
         return result.Text;
     }
