@@ -1,7 +1,8 @@
 {
   "name": "rclicker-relay",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "private": true,
+  "license": "MIT",
   "description": "rclicker cloud relay: pairs one PC with one phone and forwards end-to-end encrypted commands.",
   "type": "module",
   "scripts": {

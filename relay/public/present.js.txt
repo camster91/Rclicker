@@ -1,0 +1,623 @@
+// rclicker: present a PDF from this browser, nothing to install.
+//
+// This page does what rclicker.exe does (see RelayHostClient.cs), but for a PDF shown in the
+// browser instead of PowerPoint: it opens a relay room, shows the QR code for the phone remote
+// (remote.html), and turns the phone's commands into slide changes.
+//   - Same keys: a random 32-byte session key K in the QR code's #fragment; room id, phone
+//     token and AES-256-GCM key are HMAC-SHA-256(K, label). The relay never sees K.
+//   - Same freshness rules: each command must carry the nonce from our latest hello and a
+//     strictly increasing id, so recorded commands can't be replayed.
+//   - Only the five presentation commands exist.
+// The PDF is opened locally with pdf.js and never leaves this computer.
+
+import * as pdfjs from './vendor/pdfjs/legacy/build/pdf.min.mjs';
+import qrcode from './vendor/qrcode/dist/qrcode.mjs';
+
+const VERSION = 'web';
+const COMMANDS = ['presentation.next', 'presentation.previous', 'presentation.start', 'presentation.black', 'presentation.end'];
+const MAX_MESSAGE_BYTES = 512;
+const PING = '{"t":"ping"}';
+const PING_EVERY_MS = 15000;
+const PONG_TIMEOUT_MS = 20000;
+const MAX_BACKOFF_MS = 30000;
+const CLOSE = { badRequest: 4400, sessionEnded: 4401, forbidden: 4403, replaced: 4408 };
+
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+const $ = (id) => document.getElementById(id);
+
+const vendor = (file) => new URL('./vendor/pdfjs/' + file, import.meta.url).href;
+pdfjs.GlobalWorkerOptions.workerSrc = vendor('legacy/build/pdf.worker.min.mjs');
+
+// ---------- small helpers ----------
+
+function b64url(bytes) {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromB64url(text) {
+  let b64 = text.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+const random = (n) => crypto.getRandomValues(new Uint8Array(n));
+
+// ---------- session keys (same derivation as RelayKeys.cs and app.js) ----------
+
+async function newSession() {
+  const key = random(32);
+  const hmac = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = async (label) => new Uint8Array(await crypto.subtle.sign('HMAC', hmac, enc.encode(label)));
+  const [room, phone, aes] = await Promise.all([mac('rclicker/v1/room'), mac('rclicker/v1/phone'), mac('rclicker/v1/enc')]);
+  const phoneToken = b64url(phone);
+  return {
+    key: b64url(key),
+    room: b64url(room.slice(0, 16)),
+    phoneAuthHash: b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(phoneToken)))),
+    aesKey: await crypto.subtle.importKey('raw', aes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']),
+    // Private to this tab (never in the QR code): only we can reclaim the room after a network drop.
+    hostKey: b64url(random(32)),
+  };
+}
+
+async function encryptFor(session, payload) {
+  const iv = random(12);
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: enc.encode('rclicker/v1/h2p/' + session.room) },
+    session.aesKey,
+    enc.encode(JSON.stringify(payload)),
+  );
+  return { iv: b64url(iv), ct: b64url(new Uint8Array(ct)) };
+}
+
+async function decryptFrom(session, iv, ct) {
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: fromB64url(iv), additionalData: enc.encode('rclicker/v1/p2h/' + session.room) },
+    session.aesKey,
+    fromB64url(ct),
+  );
+  return dec.decode(plain);
+}
+
+// ---------- rate limiting (same rules as CommandRateLimiter.cs) ----------
+
+const limiter = { tokens: 6, updated: performance.now(), last: {} };
+
+function allowCommand(command) {
+  const now = performance.now();
+  if (now - (limiter.last[command] ?? -Infinity) < 200) return false; // Double tap.
+  limiter.tokens = Math.min(6, limiter.tokens + ((now - limiter.updated) / 1000) * 3);
+  limiter.updated = now;
+  if (limiter.tokens < 1) return false;
+  limiter.tokens -= 1;
+  limiter.last[command] = now;
+  return true;
+}
+
+// ---------- relay connection (host side) ----------
+
+let session = null;
+let ws = null;
+let channel = null; // { pid, label, nonce, lastId } for the one connected phone
+let attempt = 0;
+let reconnectTimer = null;
+let pingTimer = null;
+let pongTimer = null;
+let relayState = 'connecting';
+
+async function startSession(notice) {
+  stopSocket();
+  channel = null;
+  session = await newSession();
+  drawQr(new URL('remote#k=' + session.key, document.baseURI).href);
+  showNotice(notice ?? '');
+  attempt = 0;
+  connect();
+}
+
+function connect() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (!session || (ws && ws.readyState <= WebSocket.OPEN)) return;
+
+  setRelayState(attempt === 0 && relayState !== 'reconnecting' ? 'connecting' : 'reconnecting');
+  const url = new URL('ws/host?room=' + encodeURIComponent(session.room), document.baseURI);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  const mine = session;
+  const socket = new WebSocket(url.href);
+  ws = socket;
+
+  socket.onopen = () => {
+    socket.send(JSON.stringify({ t: 'claim', v: 1, hostKey: mine.hostKey, phoneAuthHash: mine.phoneAuthHash }));
+    startHeartbeat(socket);
+  };
+  socket.onmessage = (event) => {
+    if (ws === socket && session === mine) handleRelayMessage(socket, event.data);
+  };
+  socket.onerror = () => { /* onclose follows */ };
+  socket.onclose = (event) => {
+    if (ws !== socket) return;
+    ws = null;
+    stopHeartbeat();
+    channel = null;
+    if (event.code === CLOSE.sessionEnded || event.code === CLOSE.forbidden || event.code === CLOSE.badRequest) {
+      // The room expired or isn't ours any more: start fresh with a new QR code.
+      startSession('This QR code expired, so here is a new one. Scan it again.');
+      return;
+    }
+    scheduleReconnect();
+  };
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  setRelayState(navigator.onLine === false ? 'offline' : 'reconnecting');
+  const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** attempt);
+  attempt += 1;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, delay);
+}
+
+function stopSocket() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  stopHeartbeat();
+  if (ws) {
+    const socket = ws;
+    ws = null;
+    socket.onopen = socket.onmessage = socket.onclose = socket.onerror = null;
+    try { socket.close(); } catch { /* ignore */ }
+  }
+}
+
+function startHeartbeat(socket) {
+  stopHeartbeat();
+  pingTimer = setInterval(() => {
+    if (socket.readyState !== WebSocket.OPEN || pongTimer) return;
+    socket.send(PING);
+    pongTimer = setTimeout(() => {
+      // No answer: the connection is dead even if the browser hasn't noticed.
+      pongTimer = null;
+      if (ws === socket) {
+        ws = null;
+        socket.onclose = null;
+        try { socket.close(); } catch { /* ignore */ }
+        channel = null;
+        stopHeartbeat();
+        scheduleReconnect();
+      }
+    }, PONG_TIMEOUT_MS);
+  }, PING_EVERY_MS);
+}
+
+function stopHeartbeat() {
+  clearInterval(pingTimer);
+  clearTimeout(pongTimer);
+  pingTimer = null;
+  pongTimer = null;
+}
+
+function sendEnd(reason) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try { ws.send(JSON.stringify({ t: 'end', reason })); } catch { /* ignore */ }
+  }
+}
+
+async function sendSecure(socket, pid, payload) {
+  const { iv, ct } = await encryptFor(session, payload);
+  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'msg', pid, iv, ct }));
+}
+
+function hello(nonce) {
+  return { type: 'hello', version: VERSION, commands: COMMANDS, nonce };
+}
+
+function handleRelayMessage(socket, data) {
+  let msg;
+  try { msg = JSON.parse(data); } catch { return; }
+  if (!msg || typeof msg.t !== 'string') return;
+
+  switch (msg.t) {
+    case 'pong':
+      clearTimeout(pongTimer);
+      pongTimer = null;
+      break;
+    case 'ready':
+      attempt = 0;
+      setRelayState(channel ? 'connected' : 'waiting');
+      break;
+    case 'phone':
+      if (typeof msg.pid !== 'string') return;
+      if (msg.event === 'join') {
+        // The relay allows one phone; a join replaces any earlier one.
+        channel = { pid: msg.pid, label: String(msg.label ?? 'phone'), nonce: b64url(random(16)), lastId: 0 };
+        setRelayState('connected');
+        sendSecure(socket, msg.pid, hello(channel.nonce));
+      } else if (msg.event === 'leave' && channel?.pid === msg.pid) {
+        channel = null;
+        setRelayState(msg.held ? 'reconnecting-phone' : 'waiting');
+      } else if (msg.event === 'released' && !channel) {
+        setRelayState('waiting');
+      }
+      break;
+    case 'msg':
+      if (channel && msg.pid === channel.pid && typeof msg.iv === 'string' && typeof msg.ct === 'string') {
+        handlePhoneMessage(socket, channel, msg.iv, msg.ct);
+      }
+      break;
+  }
+}
+
+async function handlePhoneMessage(socket, phone, iv, ct) {
+  let text;
+  try {
+    text = await decryptFrom(session, iv, ct);
+  } catch {
+    return; // Not from our phone (wrong key, room or direction): drop it.
+  }
+  if (enc.encode(text).length > MAX_MESSAGE_BYTES) return;
+
+  let msg;
+  try { msg = JSON.parse(text); } catch { return; }
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.type !== 'string') return;
+  const id = Number.isSafeInteger(msg.id) ? msg.id : undefined;
+
+  if (msg.nonce !== phone.nonce) {
+    if (COMMANDS.includes(msg.type)) {
+      // Sent before our latest hello (we just reconnected): ask for a fresh tap.
+      await sendSecure(socket, phone.pid, { type: 'ack', id, command: msg.type, status: 'rejected', message: 'Connection refreshed. Tap again.' });
+      await sendSecure(socket, phone.pid, hello(phone.nonce));
+    }
+    return;
+  }
+  if (id === undefined) return;
+  if (id <= phone.lastId) return; // Replayed.
+
+  if (msg.type === 'ping') {
+    await sendSecure(socket, phone.pid, { type: 'pong', id });
+    return;
+  }
+  if (!COMMANDS.includes(msg.type)) {
+    await sendSecure(socket, phone.pid, { type: 'error', id, code: 'unsupported_command' });
+    return;
+  }
+
+  phone.lastId = id;
+  const result = allowCommand(msg.type) ? execute(msg.type) : { status: 'rate_limited' };
+  await sendSecure(socket, phone.pid, { type: 'ack', id, command: msg.type, ...result });
+}
+
+// ---------- slides ----------
+
+let pdf = null;
+let pageCount = 0;
+let current = 1;
+let showing = false;
+let blacked = false;
+const rendered = new Map(); // "page@WxH" -> canvas
+let renderChain = Promise.resolve();
+
+function execute(command) {
+  if (!pdf) return { status: 'rejected', message: 'Choose a PDF on the computer first.' };
+  switch (command) {
+    case 'presentation.next':
+    case 'presentation.previous':
+      // Before the show starts, the first tap just puts the current slide on screen.
+      if (!showing) showStage();
+      else if (blacked) setBlack(false);
+      else goTo(command === 'presentation.next' ? current + 1 : current - 1);
+      return { status: 'ok' };
+    case 'presentation.start':
+      setBlack(false);
+      showStage();
+      goTo(1);
+      return { status: 'ok' };
+    case 'presentation.black':
+      if (!showing) return { status: 'rejected', message: 'Start the slide show first.' };
+      setBlack(!blacked);
+      return { status: 'ok' };
+    case 'presentation.end':
+      hideStage();
+      return { status: 'ok' };
+  }
+  return { status: 'failed' };
+}
+
+async function openPdf(file) {
+  $('file-error').textContent = '';
+  if (!file) return;
+  if (file.type && file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+    $('file-error').textContent = 'That is not a PDF. Export your slides as PDF first.';
+    return;
+  }
+  $('drop').classList.add('is-busy');
+  try {
+    const data = new Uint8Array(await file.arrayBuffer());
+    const doc = await pdfjs.getDocument({
+      data,
+      cMapUrl: vendor('cmaps/'),
+      cMapPacked: true,
+      standardFontDataUrl: vendor('standard_fonts/'),
+      wasmUrl: vendor('wasm/'),
+      iccUrl: vendor('iccs/'),
+      enableScripting: false,
+    }).promise;
+    if (pdf) await pdf.destroy();
+    pdf = doc;
+    pageCount = doc.numPages;
+    current = 1;
+    rendered.clear();
+    $('deck').textContent = `${file.name} · ${pageCount} slide${pageCount === 1 ? '' : 's'}`;
+    $('step-file').hidden = true;
+    $('step-connect').hidden = false;
+    $('start').focus();
+  } catch (error) {
+    $('file-error').textContent = error?.name === 'PasswordException'
+      ? 'This PDF is password-protected. Export it again without a password.'
+      : "This PDF couldn't be opened. Try exporting it again.";
+  } finally {
+    $('drop').classList.remove('is-busy');
+  }
+}
+
+function stageSize() {
+  const stage = $('stage');
+  return { w: stage.clientWidth || window.innerWidth, h: stage.clientHeight || window.innerHeight };
+}
+
+function renderPage(n) {
+  const { w, h } = stageSize();
+  const key = `${n}@${w}x${h}`;
+  if (rendered.has(key)) return Promise.resolve(rendered.get(key));
+  // One render at a time keeps the current slide fast and memory use low.
+  const job = renderChain.then(async () => {
+    if (rendered.has(key)) return rendered.get(key);
+    const page = await pdf.getPage(n);
+    const base = page.getViewport({ scale: 1 });
+    const fit = Math.min(w / base.width, h / base.height);
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const viewport = page.getViewport({ scale: fit * dpr });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
+    canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', `Slide ${n} of ${pageCount}`);
+    await page.render({ canvas, viewport }).promise;
+    rendered.set(key, canvas);
+    if (rendered.size > 8) rendered.delete(rendered.keys().next().value);
+    return canvas;
+  });
+  renderChain = job.catch(() => {});
+  return job;
+}
+
+async function goTo(n) {
+  if (!pdf) return;
+  current = Math.max(1, Math.min(pageCount, n));
+  updateHud();
+  const wanted = current;
+  try {
+    const canvas = await renderPage(wanted);
+    if (wanted !== current) return; // The presenter moved on while this rendered.
+    $('slide').replaceChildren(canvas);
+  } catch (error) {
+    console.error('rclicker: could not draw slide', current, error);
+    showNotice("A slide couldn't be drawn. Try exporting the PDF again.");
+    return;
+  }
+  // Prepare the neighbours so the next tap is instant.
+  if (wanted + 1 <= pageCount) renderPage(wanted + 1).catch(() => {});
+  if (wanted - 1 >= 1) renderPage(wanted - 1).catch(() => {});
+}
+
+function showStage() {
+  if (showing) return;
+  showing = true;
+  $('stage').hidden = false;
+  goTo(current);
+  updateWakeLock();
+}
+
+function hideStage() {
+  if (!showing) return;
+  showing = false;
+  setBlack(false);
+  $('stage').hidden = true;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  updateWakeLock();
+  $('start').focus();
+}
+
+function setBlack(on) {
+  blacked = on;
+  $('black').hidden = !on;
+}
+
+// Leaving full screen (Esc) ends the show, so F only ever enters it.
+function enterFullscreen() {
+  if (!document.fullscreenElement) $('stage').requestFullscreen?.().catch(() => {});
+}
+
+function updateHud() {
+  $('hud-page').textContent = pdf ? `${current} / ${pageCount}` : '';
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    rendered.clear();
+    if (showing) goTo(current);
+  }, 150);
+});
+
+document.addEventListener('fullscreenchange', () => {
+  // Esc leaves full screen; like PowerPoint, that ends the slide show.
+  if (!document.fullscreenElement && showing) hideStage();
+});
+
+// Show the pointer and the slide counter briefly when the mouse moves.
+let cursorTimer = null;
+$('stage').addEventListener('mousemove', () => {
+  $('stage').classList.add('show-cursor');
+  clearTimeout(cursorTimer);
+  cursorTimer = setTimeout(() => $('stage').classList.remove('show-cursor'), 2000);
+});
+$('stage').addEventListener('click', () => {
+  if (blacked) setBlack(false);
+  else goTo(current + 1);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (!showing) {
+    if (pdf && (event.key === 'F5' || (event.key === 'Enter' && document.activeElement === document.body))) {
+      event.preventDefault();
+      startPresenting();
+    }
+    return;
+  }
+  const key = event.key;
+  let handled = true;
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'].includes(key)) {
+    if (blacked) setBlack(false); else goTo(current + 1);
+  } else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'p', 'P'].includes(key)) {
+    if (blacked) setBlack(false); else goTo(current - 1);
+  } else if (key === 'Home') {
+    goTo(1);
+  } else if (key === 'End') {
+    goTo(pageCount);
+  } else if (key === 'b' || key === 'B' || key === '.') {
+    setBlack(!blacked);
+  } else if (key === 'f' || key === 'F') {
+    enterFullscreen();
+  } else if (key === 'Escape') {
+    hideStage(); // Also leaves full screen if the browser didn't already.
+  } else {
+    handled = false;
+  }
+  if (handled) event.preventDefault();
+});
+
+function startPresenting() {
+  showStage();
+  enterFullscreen();
+}
+
+// ---------- keep the screen on while presenting ----------
+
+let wakeLock = null;
+async function updateWakeLock() {
+  const want = showing && document.visibilityState === 'visible';
+  if (want && !wakeLock && navigator.wakeLock) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch { /* not allowed right now */ }
+  } else if (!want && wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', updateWakeLock);
+
+// ---------- setup screen ----------
+
+function setRelayState(state) {
+  relayState = state;
+  const text = {
+    connecting: 'Connecting…',
+    waiting: 'Waiting for your phone…',
+    connected: `Phone connected${channel ? ` (${channel.label})` : ''}`,
+    'reconnecting-phone': 'Phone reconnecting…',
+    reconnecting: 'Reconnecting…',
+    offline: 'No internet connection. Waiting to reconnect…',
+  }[state] ?? state;
+  const dot = state === 'reconnecting-phone' ? 'reconnecting' : state;
+  $('status-text').textContent = text;
+  $('status-dot').dataset.state = dot;
+  $('hud-phone').dataset.state = dot;
+  $('hud-phone').title = text;
+}
+
+function showNotice(text) {
+  $('notice').textContent = text;
+}
+
+function drawQr(text) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  const count = qr.getModuleCount();
+  const quiet = 4;
+  const canvas = $('qr');
+  const size = canvas.width;
+  const cell = Math.floor(size / (count + quiet * 2));
+  const offset = Math.floor((size - cell * count) / 2);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000';
+  for (let r = 0; r < count; r++) {
+    for (let c = 0; c < count; c++) {
+      if (qr.isDark(r, c)) ctx.fillRect(offset + c * cell, offset + r * cell, cell, cell);
+    }
+  }
+}
+
+const fileInput = $('file');
+fileInput.addEventListener('change', () => openPdf(fileInput.files?.[0]));
+const drop = $('drop');
+for (const type of ['dragenter', 'dragover']) {
+  document.addEventListener(type, (event) => {
+    event.preventDefault();
+    drop.classList.add('is-over');
+  });
+}
+for (const type of ['dragleave', 'drop']) {
+  document.addEventListener(type, () => drop.classList.remove('is-over'));
+}
+document.addEventListener('drop', (event) => {
+  event.preventDefault();
+  if (!showing) openPdf(event.dataTransfer?.files?.[0]);
+});
+
+$('start').addEventListener('click', startPresenting);
+$('change-file').addEventListener('click', () => {
+  fileInput.value = '';
+  $('step-connect').hidden = true;
+  $('step-file').hidden = false;
+  fileInput.focus();
+});
+$('new-session').addEventListener('click', () => {
+  sendEnd('regenerated'); // The old QR code stops working; its phone sees "Session ended".
+  startSession('New QR code. Scan it with your phone.');
+});
+
+// Closing the tab tells the phone "rclicker closed" if the browser still sends this last
+// message; otherwise the phone shows "Waiting for computer…" once the connection drops.
+window.addEventListener('pagehide', () => sendEnd('shutdown'));
+window.addEventListener('online', () => {
+  if (!ws) {
+    attempt = 0;
+    connect();
+  }
+});
+
+// ---------- start ----------
+
+if (!window.isSecureContext || !crypto.subtle) {
+  $('file-error').textContent = 'This page needs a secure connection (https://).';
+} else {
+  startSession().catch(() => {
+    $('file-error').textContent = "This browser can't set up encryption. Try a recent Chrome, Edge, Firefox or Safari.";
+  });
+}

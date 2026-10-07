@@ -102,6 +102,18 @@ describe('routing', () => {
     expect(remote.headers.get('Cache-Control')).toBe('no-store');
   });
 
+  it('keeps every page out of search engines', async () => {
+    for (const path of ['/', '/remote', '/app.js', '/download', '/nope']) {
+      const response = await SELF.fetch(`https://relay.test${path}`, { redirect: 'manual' });
+      expect(response.headers.get('X-Robots-Tag'), path).toBe('noindex, nofollow');
+    }
+    const redirect = await SELF.fetch('https://example.org/clicker/', { redirect: 'manual' });
+    expect(redirect.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+    for (const path of ['/', '/remote']) {
+      expect(await (await SELF.fetch(`https://relay.test${path}`)).text(), path).toContain('<meta name="robots" content="noindex, nofollow">');
+    }
+  });
+
   it('serves only whitelisted files', async () => {
     const files: [string, string][] = [['/app.js', 'text/javascript'], ['/styles.css', 'text/css'], ['/site.css', 'text/css'], ['/site.js', 'text/javascript']];
     for (const [path, type] of files) {
@@ -121,55 +133,59 @@ describe('routing', () => {
     expect(response.headers.get('Location')).toBe('https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe');
   });
 
-  it('redirects pages on the old addresses to clicker.rotmanav.ca', async () => {
+  it('redirects pages on the old addresses to clicker.example.com', async () => {
     const cases: [string, string][] = [
-      ['https://rotmanav.ca/clicker', 'https://clicker.rotmanav.ca/'],
-      ['https://rotmanav.ca/clicker/', 'https://clicker.rotmanav.ca/'],
-      ['https://www.rotmanav.ca/clicker/remote', 'https://clicker.rotmanav.ca/remote'],
-      ['https://rotmanav.ca/clicker/download', 'https://clicker.rotmanav.ca/download'],
-      ['https://rotmanav.ca/clicker/remote?x=1', 'https://clicker.rotmanav.ca/remote?x=1'],
-      ['https://rclicker.cameron-rotman.workers.dev/', 'https://clicker.rotmanav.ca/'],
-      ['https://rclicker.cameron-rotman.workers.dev/remote', 'https://clicker.rotmanav.ca/remote'],
+      ['https://example.org/clicker', 'https://clicker.example.com/'],
+      ['https://example.org/clicker/', 'https://clicker.example.com/'],
+      ['https://www.example.org/clicker/remote', 'https://clicker.example.com/remote'],
+      ['https://example.org/clicker/download', 'https://clicker.example.com/download'],
+      ['https://example.org/clicker/remote?x=1', 'https://clicker.example.com/remote?x=1'],
+      ['https://rclicker.example.workers.dev/', 'https://clicker.example.com/'],
+      ['https://rclicker.example.workers.dev/remote', 'https://clicker.example.com/remote'],
     ];
     for (const [from, to] of cases) {
       const response = await SELF.fetch(from, { redirect: 'manual' });
       expect(response.status, from).toBe(301);
       expect(response.headers.get('Location'), from).toBe(to);
-      // rotmanav.ca's HSTS policy is the main site's call, not rclicker's.
+      // The old site's HSTS policy is that site's call, not rclicker's.
       expect(response.headers.get('Strict-Transport-Security'), from).toBeNull();
     }
-    expect((await SELF.fetch('https://rotmanav.ca/clickerx', { redirect: 'manual' })).status).toBe(404);
-    expect((await SELF.fetch('https://rotmanav.ca/', { redirect: 'manual' })).status).toBe(404);
+    expect((await SELF.fetch('https://example.org/clickerx', { redirect: 'manual' })).status).toBe(404);
+    expect((await SELF.fetch('https://example.org/', { redirect: 'manual' })).status).toBe(404);
   });
 
   it('keeps the old addresses\' sockets working for installed apps', async () => {
-    for (const [base, mount] of [['https://rotmanav.ca', '/clicker'], ['https://rclicker.cameron-rotman.workers.dev', '']]) {
+    for (const [base, mount] of [['https://example.org', '/clicker'], ['https://rclicker.example.workers.dev', '']]) {
       const r = await newRoom();
       const pc = await open(`${mount}/ws/host?room=${r.room}`, {}, base);
       pc.send({ t: 'claim', v: 1, hostKey: r.hostKey, phoneAuthHash: r.phoneAuthHash });
       expect(await pc.next()).toEqual({ t: 'ready' });
-      // The phone page now lives on clicker.rotmanav.ca; same room, same relay.
-      const p = await open(`/ws/phone?room=${r.room}`, { 'User-Agent': IPHONE_UA, Origin: 'https://clicker.rotmanav.ca' }, 'https://clicker.rotmanav.ca');
+      // The phone page now lives on clicker.example.com; same room, same relay.
+      const p = await open(`/ws/phone?room=${r.room}`, { 'User-Agent': IPHONE_UA, Origin: 'https://clicker.example.com' }, 'https://clicker.example.com');
       p.send({ t: 'auth', token: r.phoneToken, client: 'client-legacy' });
       expect(await p.next()).toEqual({ t: 'host', online: true });
       expect(await pc.next()).toMatchObject({ t: 'phone', event: 'join', label: 'iPhone' });
     }
   });
 
-  it('serves the site at the root of clicker.rotmanav.ca with HSTS', async () => {
-    const site = await SELF.fetch('https://clicker.rotmanav.ca/');
+  it('serves the site at the root of clicker.example.com with HSTS', async () => {
+    const site = await SELF.fetch('https://clicker.example.com/');
     expect(site.status).toBe(200);
     expect(site.headers.get('Strict-Transport-Security')).toContain('max-age=');
-    expect((await SELF.fetch('https://clicker.rotmanav.ca/clicker/remote')).status).toBe(404);
+    expect((await SELF.fetch('https://clicker.example.com/clicker/remote')).status).toBe(404);
   });
 
   it('limits new connections per IP address', async () => {
     const headers = { Upgrade: 'websocket', 'CF-Connecting-IP': '203.0.113.7' };
+    // A bad room id is refused after the limiter, so no rooms are created. The limiter's
+    // window follows the wall clock and may roll over mid-loop, so allow up to two windows.
     const statuses: number[] = [];
-    // A bad room id is refused after the limiter, so no rooms are created.
-    for (let i = 0; i < 61; i++) statuses.push((await SELF.fetch('https://relay.test/ws/phone?room=x', { headers })).status);
+    while (statuses.length < 121 && statuses.at(-1) !== 429) {
+      statuses.push((await SELF.fetch('https://relay.test/ws/phone?room=x', { headers })).status);
+    }
+    expect(statuses.at(-1)).toBe(429);
+    expect(statuses.length).toBeGreaterThanOrEqual(61);
     expect(statuses.slice(0, 60).every((s) => s === 400)).toBe(true);
-    expect(statuses[60]).toBe(429);
     // Another address is unaffected.
     const other = await SELF.fetch('https://relay.test/ws/phone?room=x', { headers: { ...headers, 'CF-Connecting-IP': '203.0.113.8' } });
     expect(other.status).toBe(400);

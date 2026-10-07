@@ -32,11 +32,11 @@
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
-  <!-- Relay built into this copy. Override with: dotnet publish ... -p:RelayUrl=https://<your relay> -->
-  <PropertyGroup>
-    <RelayUrl Condition="'$(RelayUrl)' == ''">https://clicker.rotmanav.ca/</RelayUrl>
-  </PropertyGroup>
-
+  <!--
+    Relay built into this copy: dotnet publish ... -p:RelayUrl=https://<your relay>
+    (or a RelayUrl environment variable; CI sets it from the RELAY_URL secret).
+    Without it, pass the relay switch or set RCLICKER_RELAY when running the app.
+  -->
   <ItemGroup>
     <AssemblyMetadata Include="RelayUrl" Value="$(RelayUrl)" />
   </ItemGroup>

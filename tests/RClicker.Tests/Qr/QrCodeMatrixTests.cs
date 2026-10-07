@@ -55,8 +55,8 @@ public class QrCodeMatrixTests
         Assert.Contains(sessions.Current.Token, after, StringComparison.Ordinal);
     }
 
-    // Real relay addresses: the old workers.dev one is the longest, so it decides the size limit.
-    private static string PhoneUrl(string token, string relayAddress = "https://rclicker.cameron-rotman.workers.dev")
+    // Realistic relay addresses: a long workers.dev one decides the size limit.
+    private static string PhoneUrl(string token, string relayAddress = "https://rclicker.example-relays.workers.dev")
     {
         Assert.True(RelayUrls.TryParse(relayAddress, out var relay));
         return RelayUrls.PhoneUrl(relay, token).ToString();
@@ -65,7 +65,7 @@ public class QrCodeMatrixTests
     [Fact]
     public void QrCode_ForDefaultAddress_IsSmallAndDecodes()
     {
-        var url = PhoneUrl(SessionToken.Generate(), "https://clicker.rotmanav.ca");
+        var url = PhoneUrl(SessionToken.Generate(), "https://clicker.example.com");
         var matrix = QrCodeMatrix.Create(url);
 
         Assert.Equal(url, Decode(matrix));

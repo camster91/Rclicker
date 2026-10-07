@@ -4,5 +4,12 @@
   'use strict';
   if (/(^#|&)k=/.test(window.location.hash)) {
     window.location.replace('remote' + window.location.hash);
+    return;
   }
+
+  // The address IT should allow is whatever this page was served from.
+  document.addEventListener('DOMContentLoaded', function () {
+    var host = document.getElementById('site-host');
+    if (host) host.textContent = window.location.host;
+  });
 })();

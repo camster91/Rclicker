@@ -44,10 +44,10 @@ public class RelayUrlsTests
     public void Urls_WorkWhenTheRelayLivesUnderAPath()
     {
         var token = SessionToken.Generate();
-        Assert.True(RelayUrls.TryParse("https://rotmanav.ca/clicker", out var relay));
+        Assert.True(RelayUrls.TryParse("https://example.org/clicker", out var relay));
 
-        Assert.Equal($"https://rotmanav.ca/clicker/remote#k={token}", RelayUrls.PhoneUrl(relay, token).ToString());
-        Assert.Equal("wss://rotmanav.ca/clicker/ws/host?room=abc", RelayUrls.HostSocketUrl(relay, "abc").ToString());
+        Assert.Equal($"https://example.org/clicker/remote#k={token}", RelayUrls.PhoneUrl(relay, token).ToString());
+        Assert.Equal("wss://example.org/clicker/ws/host?room=abc", RelayUrls.HostSocketUrl(relay, "abc").ToString());
     }
 
     [Fact]
