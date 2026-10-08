@@ -30,11 +30,55 @@ function Assert-Equal([object] $expected, [object] $actual, [string] $message) {
     }
 }
 
-function Test-ReleaseGuard([string] $eventName, [string] $ref, [bool] $publishRelease, [string] $buildResult = 'success', [string] $relayResult = 'success', [bool] $relayConfigured = $true, [string] $signResult = 'success') {
-    $mainManual = $eventName -eq 'workflow_dispatch' -and $publishRelease -and $ref -eq 'refs/heads/main'
-    $previewPush = $eventName -eq 'push' -and $ref.StartsWith('refs/heads/claude/')
-    $checksPassed = $buildResult -eq 'success' -and $relayResult -eq 'success' -and $relayConfigured -and ($signResult -eq 'success' -or $signResult -eq 'skipped')
-    return ($mainManual -or $previewPush) -and $checksPassed
+function Get-ReleaseIfExpression([string] $releaseBlock) {
+    $lines = $releaseBlock -split '\r?\n'
+    $ifIndex = -1
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -eq '    if: >-') {
+            $ifIndex = $index
+            break
+        }
+    }
+    if ($ifIndex -lt 0) {
+        throw 'The release job has no folded if expression to evaluate.'
+    }
+
+    $expressionLines = @()
+    for ($index = $ifIndex + 1; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -notmatch '^      ') {
+            break
+        }
+        $expressionLines += $lines[$index].Substring(6)
+    }
+    if ($expressionLines.Count -eq 0) {
+        throw 'The release job has an empty folded if expression.'
+    }
+
+    return ($expressionLines -join ' ').Trim()
+}
+
+function Evaluate-ReleaseIf([string] $expression, [string] $eventName, [string] $ref, [bool] $publishRelease, [string] $buildResult = 'success', [string] $relayResult = 'success', [bool] $relayConfigured = $true, [string] $signResult = 'success') {
+    $values = @{
+        'always()' = $true
+        "github.event_name == 'workflow_dispatch'" = ($eventName -eq 'workflow_dispatch')
+        "inputs.publish_release == true" = $publishRelease
+        "github.ref == 'refs/heads/main'" = ($ref -eq 'refs/heads/main')
+        "github.event_name == 'push'" = ($eventName -eq 'push')
+        "startsWith(github.ref, 'refs/heads/claude/')" = $ref.StartsWith('refs/heads/claude/')
+        "needs.build.result == 'success'" = ($buildResult -eq 'success')
+        "needs.relay.result == 'success'" = ($relayResult -eq 'success')
+        "needs.build.outputs.relay == 'true'" = $relayConfigured
+        "needs.sign.result == 'success'" = ($signResult -eq 'success')
+        "needs.sign.result == 'skipped'" = ($signResult -eq 'skipped')
+    }
+
+    $evaluated = $expression
+    foreach ($entry in ($values.GetEnumerator() | Sort-Object { $_.Key.Length } -Descending)) {
+        $replacement = if ($entry.Value) { '$true' } else { '$false' }
+        $evaluated = $evaluated.Replace($entry.Key, $replacement)
+    }
+    $evaluated = $evaluated.Replace('&&', ' -and ').Replace('||', ' -or ')
+    return [bool](& ([scriptblock]::Create($evaluated)))
 }
 
 Assert-Matches $workflow '(?ms)^  workflow_dispatch:\r?\n    inputs:\r?\n      publish_release:' 'Manual publication must expose an explicit workflow input.'
@@ -64,11 +108,14 @@ Assert-Contains $release "needs.relay.result == 'success'" 'Publication must req
 Assert-Contains $release "needs.build.outputs.relay == 'true'" 'Publication must require a configured relay.'
 Assert-Contains $release "needs.sign.result == 'success' || needs.sign.result == 'skipped'" 'Publication must preserve the existing signing gate.'
 
-Assert-Equal $false (Test-ReleaseGuard 'push' 'refs/heads/main' $false) 'A main push must not publish.'
-Assert-Equal $false (Test-ReleaseGuard 'workflow_dispatch' 'refs/heads/main' $false) 'A default manual main run must not publish.'
-Assert-Equal $true (Test-ReleaseGuard 'workflow_dispatch' 'refs/heads/main' $true) 'An explicitly approved manual main run should publish after passing gates.'
-Assert-Equal $false (Test-ReleaseGuard 'workflow_dispatch' 'refs/heads/main' $true 'failure') 'A manual main run with a failed build must not publish.'
-Assert-Equal $true (Test-ReleaseGuard 'push' 'refs/heads/claude/example' $false) 'A claude preview push should retain its existing publication behavior.'
-Assert-Equal $false (Test-ReleaseGuard 'push' 'refs/heads/feature/example' $true) 'Other branch pushes must not publish.'
+$releaseExpression = Get-ReleaseIfExpression $release
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/main' $false) 'A main push must not publish.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $false) 'A default manual main run must not publish.'
+Assert-Equal $true (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true) 'An explicitly approved manual main run should publish after passing gates.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'failure') 'A manual main run with a failed build must not publish.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'failure') 'A manual main run with a failed relay job must not publish.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'success' $true 'failure') 'A manual main run with failed signing must not publish.'
+Assert-Equal $true (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/claude/example' $false 'success' 'success' $true 'skipped') 'A claude preview push should retain its existing publication behavior.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/feature/example' $true) 'Other branch pushes must not publish.'
 
-Write-Host 'MSIX signing and release workflow guards: 26 scenarios passed.'
+Write-Host 'MSIX signing workflow invariants passed; release if-expression scenarios: 8 passed.'
