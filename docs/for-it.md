@@ -32,9 +32,10 @@ For the desktop file, inspect the actual release before creating a rule:
 
 1. Open `rclicker.exe` properties and confirm the Digital Signatures tab reports
    a valid signature and the verified publisher **Cameron Ashley**.
-2. Use the signer or publisher identity in the organisation's endpoint policy.
-   In CrowdStrike, this belongs in the tenant's ML/IOA exclusion review. In
-   SentinelOne, use the tenant's signer-identity exclusion workflow.
+2. Use the signer or publisher identity in the organisation's approved endpoint
+   policy or application-control review. Product-specific exclusion names and
+   approval requirements vary by tenant, so the endpoint-security team should
+   follow its vendor and internal policy documentation.
 3. Keep the file hash and path as supporting details. They change between
    releases, while the verified publisher is the identity the signed artifact
    carries.

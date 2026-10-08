@@ -35,6 +35,8 @@ internal static partial class NativeMethods
 
     internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     internal const uint ERROR_INSUFFICIENT_BUFFER = 122;
+    internal const int INITIAL_PROCESS_PATH_BUFFER_LENGTH = 260;
+    internal const int MAX_PROCESS_PATH_BUFFER_LENGTH = 32 * 1024;
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
@@ -64,8 +66,8 @@ internal static partial class NativeMethods
             return null;
         }
 
-        var buffer = new char[260];
-        while (buffer.Length <= 32 * 1024)
+        var buffer = new char[INITIAL_PROCESS_PATH_BUFFER_LENGTH];
+        while (true)
         {
             uint length = (uint)buffer.Length;
             fixed (char* path = buffer)
@@ -90,10 +92,21 @@ internal static partial class NativeMethods
                 return null;
             }
 
-            Array.Resize(ref buffer, checked(buffer.Length * 2));
-        }
+            int nextLength = NextProcessPathBufferLength(buffer.Length);
+            if (nextLength == buffer.Length)
+            {
+                return null;
+            }
 
-        return null;
+            Array.Resize(ref buffer, nextLength);
+        }
+    }
+
+    internal static int NextProcessPathBufferLength(int currentLength)
+    {
+        return currentLength >= MAX_PROCESS_PATH_BUFFER_LENGTH
+            ? MAX_PROCESS_PATH_BUFFER_LENGTH
+            : Math.Min(checked(currentLength * 2), MAX_PROCESS_PATH_BUFFER_LENGTH);
     }
 
     [LibraryImport("user32.dll", EntryPoint = "GetClassNameW", SetLastError = true)]
