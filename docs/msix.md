@@ -54,9 +54,12 @@ on `windows-latest` and also keeps the portable EXE package validation.
 An unsigned MSIX cannot be installed. Local and CI lifecycle checks use a
 disposable self-signed certificate only for testing. A distributed package
 must be signed by the configured production publisher, and the certificate's
-subject must exactly match the manifest `Publisher` value. The existing shared
-signing workflow supports `.msix`, but production MSIX signing and publication
-remain a release-owner gate.
+subject must exactly match the manifest `Publisher` value. On main pushes and
+manual runs from main, CI sends the unsigned MSIX artifact through the shared
+Azure OIDC signing workflow and uploads the verified result as a separate
+`rclicker-msix-win-x64-unsigned-signed` artifact. It is retained for production
+validation and is not included in the EXE release publication. Production
+distribution remains a release-owner gate.
 
 Keep the identity name and publisher unchanged for updates. Increase the
 four-part package version; Windows uses the higher version to update the

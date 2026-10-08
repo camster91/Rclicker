@@ -27,6 +27,10 @@ jobs:
         shell: pwsh
         run: ./tools/test-signature-verification.ps1
 
+      - name: Test MSIX signing workflow guards
+        shell: pwsh
+        run: ./tools/test-msix-signing-workflow.ps1
+
       - name: Restore
         run: dotnet restore RClicker.sln
 
@@ -138,6 +142,19 @@ jobs:
     with:
       artifact: rclicker-win-x64
       file-types: exe
+
+  # Signs the optional MSIX artifact with the same Azure OIDC workflow. It is
+  # retained as a separate artifact and is intentionally not a release input.
+  sign-msix:
+    needs: [build, relay]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.build.outputs.relay == 'true'
+    permissions:
+      contents: read
+      id-token: write # Azure sign-in without stored secrets (OIDC)
+    uses: ./.github/workflows/sign-windows.yml
+    with:
+      artifact: rclicker-msix-win-x64-unsigned
+      file-types: msix
 
   # Publishes the built rclicker.exe as a GitHub Release (direct download, no sign-in).
   # main → release vX.Y.Z (latest); claude/* branches → pre-release vX.Y.Z-preview. Re-runs replace the files.
