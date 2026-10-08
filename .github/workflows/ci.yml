@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the portable EXE release after all checks pass
+        required: true
+        default: false
+        type: boolean
 
 # Third-party actions are pinned to exact commits (tag in the comment); Dependabot proposes updates.
 permissions:
@@ -26,6 +32,10 @@ jobs:
       - name: Test shared signature verification
         shell: pwsh
         run: ./tools/test-signature-verification.ps1
+
+      - name: Test MSIX signing workflow guards
+        shell: pwsh
+        run: ./tools/test-msix-signing-workflow.ps1
 
       - name: Restore
         run: dotnet restore RClicker.sln
@@ -56,10 +66,40 @@ jobs:
           RelayUrl: ${{ secrets.RELAY_URL }}
         run: dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 
+      - name: Validate Windows package
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem artifacts/publish/win-x64 -File)
+          if ($files.Count -ne 1 -or $files[0].Name -ne 'rclicker.exe') {
+            throw "The release package must contain exactly one runnable rclicker.exe (found: $($files.Name -join ', '))."
+          }
+          if ($files[0].Length -lt 100MB) {
+            throw "The release executable is unexpectedly small ($($files[0].Length) bytes); compression may have been enabled again."
+          }
+          Write-Host "Validated uncompressed single-file package: $($files[0].Length) bytes"
+
+      - name: Build unsigned MSIX package
+        shell: pwsh
+        env:
+          RelayUrl: ${{ secrets.RELAY_URL }}
+        run: ./tools/build-msix.ps1 -RuntimeIdentifier win-x64 -OutputDirectory artifacts/msix/win-x64
+
+      - name: Test MSIX lifecycle on an isolated package identity
+        shell: pwsh
+        env:
+          RelayUrl: ${{ secrets.RELAY_URL }}
+        run: ./tools/test-msix.ps1 -PackagePath artifacts/msix/win-x64/rclicker-x64.msix
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rclicker-win-x64
           path: artifacts/publish/win-x64/rclicker.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rclicker-msix-win-x64-unsigned
+          path: artifacts/msix/win-x64/rclicker-x64.msix
           if-no-files-found: error
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -109,14 +149,29 @@ jobs:
       artifact: rclicker-win-x64
       file-types: exe
 
+  # Signs the optional MSIX artifact with the same Azure OIDC workflow. It is
+  # retained as a separate artifact and is intentionally not a release input.
+  sign-msix:
+    needs: [build, relay]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.build.outputs.relay == 'true'
+    permissions:
+      contents: read
+      id-token: write # Azure sign-in without stored secrets (OIDC)
+    uses: ./.github/workflows/sign-windows.yml
+    with:
+      artifact: rclicker-msix-win-x64-unsigned
+      file-types: msix
+
   # Publishes the built rclicker.exe as a GitHub Release (direct download, no sign-in).
-  # main → release vX.Y.Z (latest); claude/* branches → pre-release vX.Y.Z-preview. Re-runs replace the files.
+  # main → release only when a manual run sets publish_release=true; claude/* branches
+  # retain their automatic vX.Y.Z-preview publication. Re-runs replace the files.
   # Uses the signed file when signing ran; a failed signing publishes nothing.
   release:
     needs: [build, relay, sign]
     if: >-
-      always() && github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')) &&
+      always() &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_release == true && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/claude/'))) &&
       needs.build.result == 'success' && needs.relay.result == 'success' &&
       needs.build.outputs.relay == 'true' &&
       (needs.sign.result == 'success' || needs.sign.result == 'skipped')

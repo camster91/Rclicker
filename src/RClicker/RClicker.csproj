@@ -26,8 +26,12 @@
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
+    <!-- Keep the single-file executable easy for endpoint scanners to inspect. -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <!-- The self-contained .NET runtime still has native runtime libraries. Keep
+         them bundled so the published artifact remains one runnable executable;
+         only the app's system32 P/Invokes are external dependencies. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
@@ -49,6 +53,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RClicker.Core\RClicker.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RClicker.Tests" />
   </ItemGroup>
 
 </Project>

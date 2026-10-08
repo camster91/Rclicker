@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace RClicker.Native;
 
@@ -31,6 +32,82 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     internal static partial uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    internal const uint ERROR_INSUFFICIENT_BUFFER = 122;
+    internal const int INITIAL_PROCESS_PATH_BUFFER_LENGTH = 260;
+    internal const int MAX_PROCESS_PATH_BUFFER_LENGTH = 32 * 1024;
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    internal static partial SafeProcessHandle OpenProcess(
+        uint dwDesiredAccess,
+        [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle,
+        uint dwProcessId);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static unsafe partial bool QueryFullProcessImageName(
+        SafeProcessHandle hProcess,
+        uint dwFlags,
+        char* lpExeName,
+        ref uint lpdwSize);
+
+    /// <summary>
+    /// Reads a process name through the least-privileged process query API.
+    /// An inaccessible or exited process is deliberately reported as unknown.
+    /// </summary>
+    internal static unsafe string? GetProcessName(uint processId)
+    {
+        using var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+        if (process.IsInvalid)
+        {
+            return null;
+        }
+
+        var buffer = new char[INITIAL_PROCESS_PATH_BUFFER_LENGTH];
+        while (true)
+        {
+            uint length = (uint)buffer.Length;
+            fixed (char* path = buffer)
+            {
+                if (QueryFullProcessImageName(process, 0, path, ref length))
+                {
+                    var fullPath = new ReadOnlySpan<char>(path, checked((int)length));
+                    int separator = fullPath.LastIndexOfAny('\\', '/');
+                    var fileName = fullPath[(separator + 1)..];
+                    int extension = fileName.LastIndexOf('.');
+                    if (extension > 0 && fileName[extension..].Equals(".exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fileName = fileName[..extension];
+                    }
+
+                    return fileName.Length == 0 ? null : new string(fileName);
+                }
+            }
+
+            if (Marshal.GetLastPInvokeError() != ERROR_INSUFFICIENT_BUFFER)
+            {
+                return null;
+            }
+
+            int nextLength = NextProcessPathBufferLength(buffer.Length);
+            if (nextLength == buffer.Length)
+            {
+                return null;
+            }
+
+            Array.Resize(ref buffer, nextLength);
+        }
+    }
+
+    internal static int NextProcessPathBufferLength(int currentLength)
+    {
+        return currentLength >= MAX_PROCESS_PATH_BUFFER_LENGTH
+            ? MAX_PROCESS_PATH_BUFFER_LENGTH
+            : Math.Min(checked(currentLength * 2), MAX_PROCESS_PATH_BUFFER_LENGTH);
+    }
 
     [LibraryImport("user32.dll", EntryPoint = "GetClassNameW", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
