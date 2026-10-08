@@ -8,6 +8,8 @@ Turn your phone into a PowerPoint clicker. No app to install on the phone, and i
 
 **Download: [rclicker.exe](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe)** (latest release, Windows 10/11). All releases: https://github.com/camster91/Rclicker/releases
 
+Managed Windows presentation PCs can use the optional [MSIX package](docs/msix.md); the portable EXE remains available for machines where installation is restricted.
+
 Originally built for presenters whose guest devices and room PCs sit on different networks.
 
 ## How it works
