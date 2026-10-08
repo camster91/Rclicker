@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $workflow = Get-Content (Join-Path $PSScriptRoot '../.github/workflows/ci.yml') -Raw
+$publisher = Get-Content (Join-Path $PSScriptRoot 'publish-release.sh') -Raw
 
 function Assert-Contains([string] $text, [string] $expected, [string] $message) {
     if (-not $text.Contains($expected)) {
@@ -102,9 +103,9 @@ Assert-Contains $signMsix 'file-types: msix' 'MSIX signing must restrict the sha
 $release = Get-JobBlock 'release'
 Assert-Contains $release 'needs: [build, relay, sign, sign-msix]' 'Publication must wait for the MSIX signing job.'
 Assert-Contains $release 'rclicker-msix-win-x64-unsigned-signed' 'Main publication must consume the signed MSIX artifact.'
-Assert-Contains $release 'rclicker-win-x64.msix' 'Main publication must publish the stable MSIX filename.'
-Assert-Contains $release 'SHA256SUMS.txt' 'Main publication must publish checksums.'
 Assert-Contains $release './tools/publish-release.sh' 'Publication must run the guarded release publisher.'
+Assert-Contains $publisher 'rclicker-win-x64.msix' 'Main publication must publish the stable MSIX filename.'
+Assert-Contains $publisher 'SHA256SUMS.txt' 'Main publication must publish checksums.'
 Assert-Contains $release "github.event_name == 'workflow_dispatch'" 'Main publication must require a manual workflow run.'
 Assert-Contains $release 'inputs.publish_release == true' 'Main publication must require the explicit publish checkbox.'
 Assert-Contains $release "github.ref == 'refs/heads/main'" 'The portable release must remain main-only.'
