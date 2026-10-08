@@ -13,7 +13,7 @@ as the Windows release:
 - Publisher: `CN=Cameron Ashley, O=Cameron Ashley, L=Scarborough, S=on, C=CA`
 - Package version: the three-part product version plus a fourth component, for
   example `0.2.4.0`
-- Desktop entry point: `Windows.FullTrustApplication`
+- Desktop entry point: `windows.fullTrustApplication`
 - Required capability: `runFullTrust`
 
 Full trust is required because the receiver is a Win32 WinForms program. It

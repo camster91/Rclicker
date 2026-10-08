@@ -60,7 +60,7 @@ function Read-PackageXml([object] $package) {
     $namespaces = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
     $namespaces.AddNamespace('f', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
     $namespaces.AddNamespace('uap', 'http://schemas.microsoft.com/appx/manifest/uap/windows10')
-    $namespaces.AddNamespace('rescap', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedCapabilities')
+    $namespaces.AddNamespace('rescap', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities')
     return [pscustomobject]@{
         Xml = $manifest
         Namespaces = $namespaces
@@ -84,7 +84,7 @@ function Assert-PackageContract([object] $package, [string] $expectedVersion) {
     Assert-Equal 'x64' $xml.Identity.ProcessorArchitecture 'The lifecycle test must exercise the x64 package.'
     Assert-True ($null -ne $xml.Application) 'The manifest has no application entry.'
     Assert-Equal 'rclicker.exe' $xml.Application.Executable 'The manifest executable changed.'
-    Assert-Equal 'Windows.FullTrustApplication' $xml.Application.EntryPoint 'The app is not declared as a full-trust desktop application.'
+    Assert-Equal 'windows.fullTrustApplication' $xml.Application.EntryPoint 'The app is not declared as a full-trust desktop application.'
     Assert-True ($null -ne $xml.VisualElements) 'The manifest has no visual elements.'
     Assert-True ($null -ne $xml.FullTrust) 'The manifest is missing runFullTrust.'
 }
