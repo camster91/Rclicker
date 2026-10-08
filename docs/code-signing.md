@@ -56,9 +56,9 @@ In [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml)
 | `AZURE_SIGNING_PROFILE` | e.g. `camster` |
 | `AZURE_SIGNING_PUBLISHER` | Exact verified certificate name, currently `Cameron Ashley` |
 
-Or send them to Claude to fill in. The next build of rclicker's `main` branch then signs `rclicker.exe`, checks the signature, and publishes it.
+Or send them to Claude to fill in. The next build of rclicker's `main` branch signs `rclicker.exe` and checks the signature; it does not publish a release automatically.
 
-A manual **Actions → CI → Run workflow** run from `main` builds, signs and verifies the downloadable workflow artifact. It does not update the public release; release publishing remains limited to pushes.
+A manual **Actions → CI → Run workflow** run from `main` builds, signs and verifies the workflow artifacts. Leave **Publish the portable EXE release after all checks pass** unchecked for artifact-only validation. Cameron must explicitly enable it for the main release job to publish after all gates pass. `claude/*` pushes retain their separate preview release behavior.
 
 ## Allow a repository
 

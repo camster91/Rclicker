@@ -25,7 +25,7 @@ Neither suite presses real keys: the presentation controller and key sender are 
 
 Phone page served with security headers and a strict path whitelist; WebSocket only, room id format, cross-origin refused; PC + phone pairing and forwarding both ways; wrong token, unclaimed room and foreign PC refused; PC offline/online notices and reclaim; 10-second disconnect notice, returning-phone status, grace-period recovery and two-hour expiry; ping auto-response; busy second phone; same-browser takeover; seat held then released (alarm); New session (4401) and Quit (4410); malformed or hostile messages not forwarded; oversized (1009) and flood (1008) disconnects; unauthenticated sockets time out; WebCrypto derivation and decryption match the Python vectors.
 
-CI (`.github/workflows/ci.yml`) runs both suites, plus the `win-x64` publish on `windows-latest`.
+CI (`.github/workflows/ci.yml`) runs both suites, plus the `win-x64` portable publish and the isolated MSIX install, full-trust manifest, packaged runtime, in-place update, and uninstall check on `windows-latest`.
 
 ## Manual / end-to-end QA performed for 0.2.0
 
