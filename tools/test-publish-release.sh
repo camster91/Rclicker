@@ -8,6 +8,16 @@ trap 'rm -rf "$workdir"' EXIT
 
 fake_bin="$workdir/bin"
 mkdir -p "$fake_bin"
+cat > "$fake_bin/zip" <<'FAKE_ZIP'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The production publisher runs on Ubuntu, where zip is available. The Windows
+# CI guard harness only needs a placeholder archive before it reaches GitHub.
+printf 'test archive\n' > "${PWD}/rclicker-win-x64.zip"
+FAKE_ZIP
+chmod +x "$fake_bin/zip"
+
 cat > "$fake_bin/gh" <<'FAKE_GH'
 #!/usr/bin/env bash
 set -euo pipefail
