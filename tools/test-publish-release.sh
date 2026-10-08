@@ -25,18 +25,22 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_GH_LOG"
 case "${1:-} ${2:-}" in
   "release view")
-    if [ "${FAKE_GH_MODE:-}" = "stable-mismatch" ] || [ "${FAKE_GH_MODE:-}" = "preview-existing" ]; then
+    if [ "${FAKE_GH_MODE:-}" = "stable-mismatch" ] || [ "${FAKE_GH_MODE:-}" = "stable-missing-assets" ] || [ "${FAKE_GH_MODE:-}" = "stable-complete" ] || [ "${FAKE_GH_MODE:-}" = "preview-existing" ]; then
       if [ "${FAKE_GH_MODE:-}" = "stable-mismatch" ]; then
-        printf '%s\n' '{"tagName":"v0.2.5","name":"rclicker 0.2.4","isPrerelease":false}'
+        printf '%s\n' '{"tagName":"v0.2.5","name":"rclicker 0.2.4","isPrerelease":false,"assets":[]}'
+      elif [ "${FAKE_GH_MODE:-}" = "stable-missing-assets" ]; then
+        printf '%s\n' '{"tagName":"v0.2.5","name":"rclicker 0.2.5","isPrerelease":false,"assets":[{"name":"rclicker.exe"}]}'
+      elif [ "${FAKE_GH_MODE:-}" = "stable-complete" ]; then
+        printf '%s\n' '{"tagName":"v0.2.5","name":"rclicker 0.2.5","isPrerelease":false,"assets":[{"name":"rclicker.exe"},{"name":"rclicker-win-x64.zip"},{"name":"rclicker-win-x64.msix"},{"name":"sha256.txt"}]}'
       else
-        printf '%s\n' '{"tagName":"v0.2.5-preview","name":"rclicker 0.2.5 preview","isPrerelease":true}'
+        printf '%s\n' '{"tagName":"v0.2.5-preview","name":"rclicker 0.2.5 preview","isPrerelease":true,"assets":[]}'
       fi
       exit 0
     fi
     exit 1
     ;;
   api*)
-    if [ "${FAKE_GH_MODE:-}" = "stable-mismatch" ]; then
+    if [ "${FAKE_GH_MODE:-}" = "stable-mismatch" ] || [ "${FAKE_GH_MODE:-}" = "stable-missing-assets" ] || [ "${FAKE_GH_MODE:-}" = "stable-complete" ]; then
       printf '%s\n' '{"object":{"sha":"new-source-sha","type":"commit"}}'
       exit 0
     fi
@@ -96,6 +100,28 @@ printf 'signed-msix' > "$DIST_DIR/rclicker-x64.msix"
 GITHUB_REF='refs/heads/main' GITHUB_SHA='new-source-sha' SIGNED=true MSIX_SIGNED=true \
   FAKE_GH_MODE='stable-mismatch' FAKE_GH_LOG="$workdir/old-stable.log" \
   expect_failure 'mismatched name, tag, or prerelease state' run_publisher
+
+# A matching stable release with missing assets must fail closed instead of being
+# reported as complete while its immutable download is broken.
+DIST_DIR="$workdir/missing-stable-assets"
+mkdir -p "$DIST_DIR"
+printf 'signed-exe' > "$DIST_DIR/rclicker.exe"
+printf 'signed-msix' > "$DIST_DIR/rclicker-x64.msix"
+GITHUB_REF='refs/heads/main' GITHUB_SHA='new-source-sha' SIGNED=true MSIX_SIGNED=true \
+  FAKE_GH_MODE='stable-missing-assets' FAKE_GH_LOG="$workdir/missing-stable-assets.log" \
+  expect_failure 'missing required asset' run_publisher
+
+# A complete matching stable release is still a no-op; immutable assets are not
+# replaced on a rerun.
+DIST_DIR="$workdir/complete-stable"
+mkdir -p "$DIST_DIR"
+printf 'signed-exe' > "$DIST_DIR/rclicker.exe"
+printf 'signed-msix' > "$DIST_DIR/rclicker-x64.msix"
+GITHUB_REF='refs/heads/main' GITHUB_SHA='new-source-sha' SIGNED=true MSIX_SIGNED=true \
+  FAKE_GH_MODE='stable-complete' FAKE_GH_LOG="$workdir/complete-stable.log" \
+  run_publisher
+! grep -Fq -- 'release create' "$workdir/complete-stable.log"
+! grep -Fq -- 'release upload' "$workdir/complete-stable.log"
 
 # Preview creation remains portable-only.
 DIST_DIR="$workdir/preview-create"
