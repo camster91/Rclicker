@@ -57,7 +57,7 @@ function Get-ReleaseIfExpression([string] $releaseBlock) {
     return ($expressionLines -join ' ').Trim()
 }
 
-function Evaluate-ReleaseIf([string] $expression, [string] $eventName, [string] $ref, [bool] $publishRelease, [string] $buildResult = 'success', [string] $relayResult = 'success', [bool] $relayConfigured = $true, [string] $signResult = 'success') {
+function Evaluate-ReleaseIf([string] $expression, [string] $eventName, [string] $ref, [bool] $publishRelease, [string] $buildResult = 'success', [string] $relayResult = 'success', [bool] $relayConfigured = $true, [string] $signResult = 'success', [bool] $signed = $true, [string] $signMsixResult = 'skipped', [bool] $msixSigned = $false) {
     $values = @{
         'always()' = $true
         "github.event_name == 'workflow_dispatch'" = ($eventName -eq 'workflow_dispatch')
@@ -70,6 +70,10 @@ function Evaluate-ReleaseIf([string] $expression, [string] $eventName, [string] 
         "needs.build.outputs.relay == 'true'" = $relayConfigured
         "needs.sign.result == 'success'" = ($signResult -eq 'success')
         "needs.sign.result == 'skipped'" = ($signResult -eq 'skipped')
+        "needs['sign-msix'].result == 'success'" = ($signMsixResult -eq 'success')
+        "needs['sign-msix'].result == 'skipped'" = ($signMsixResult -eq 'skipped')
+        "needs.sign.outputs.signed == 'true'" = $signed
+        "needs['sign-msix'].outputs.signed == 'true'" = $msixSigned
     }
 
     $evaluated = $expression
@@ -96,9 +100,11 @@ Assert-Contains $signMsix 'artifact: rclicker-msix-win-x64-unsigned' 'MSIX signi
 Assert-Contains $signMsix 'file-types: msix' 'MSIX signing must restrict the shared signer to MSIX files.'
 
 $release = Get-JobBlock 'release'
-if ($release.Contains('sign-msix') -or $release.Contains('rclicker-msix-win-x64-signed')) {
-    throw 'The release job must not consume or publish the signed MSIX artifact.'
-}
+Assert-Contains $release 'needs: [build, relay, sign, sign-msix]' 'Publication must wait for the MSIX signing job.'
+Assert-Contains $release 'rclicker-msix-win-x64-unsigned-signed' 'Main publication must consume the signed MSIX artifact.'
+Assert-Contains $release 'rclicker-win-x64.msix' 'Main publication must publish the stable MSIX filename.'
+Assert-Contains $release 'SHA256SUMS.txt' 'Main publication must publish checksums.'
+Assert-Contains $release './tools/publish-release.sh' 'Publication must run the guarded release publisher.'
 Assert-Contains $release "github.event_name == 'workflow_dispatch'" 'Main publication must require a manual workflow run.'
 Assert-Contains $release 'inputs.publish_release == true' 'Main publication must require the explicit publish checkbox.'
 Assert-Contains $release "github.ref == 'refs/heads/main'" 'The portable release must remain main-only.'
@@ -106,16 +112,20 @@ Assert-Contains $release "github.event_name == 'push' && startsWith(github.ref, 
 Assert-Contains $release "needs.build.result == 'success'" 'Publication must require a passing build.'
 Assert-Contains $release "needs.relay.result == 'success'" 'Publication must require a passing relay job.'
 Assert-Contains $release "needs.build.outputs.relay == 'true'" 'Publication must require a configured relay.'
-Assert-Contains $release "needs.sign.result == 'success' || needs.sign.result == 'skipped'" 'Publication must preserve the existing signing gate.'
+Assert-Contains $release "needs.sign.result == 'success'" 'Main publication must require a successful EXE signing job.'
+Assert-Contains $release "needs['sign-msix'].result == 'success'" 'Main publication must require a successful MSIX signing job.'
+Assert-Contains $release "needs['sign-msix'].outputs.signed == 'true'" 'Main publication must require a signed MSIX output.'
 
 $releaseExpression = Get-ReleaseIfExpression $release
 Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/main' $false) 'A main push must not publish.'
 Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $false) 'A default manual main run must not publish.'
-Assert-Equal $true (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true) 'An explicitly approved manual main run should publish after passing gates.'
+Assert-Equal $true (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'success' $true 'success' $true 'success' $true) 'An explicitly approved manual main run should publish after all signed gates pass.'
 Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'failure') 'A manual main run with a failed build must not publish.'
 Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'failure') 'A manual main run with a failed relay job must not publish.'
 Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'success' $true 'failure') 'A manual main run with failed signing must not publish.'
-Assert-Equal $true (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/claude/example' $false 'success' 'success' $true 'skipped') 'A claude preview push should retain its existing publication behavior.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'success' $true 'success' $true 'failure' $false) 'A manual main run with failed MSIX signing must not publish.'
+Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'workflow_dispatch' 'refs/heads/main' $true 'success' 'success' $true 'success' $false 'success' $true) 'A manual main run with an unsigned EXE must not publish.'
+Assert-Equal $true (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/claude/example' $false 'success' 'success' $true 'skipped' $false 'skipped' $false) 'A claude preview push should retain its existing publication behavior.'
 Assert-Equal $false (Evaluate-ReleaseIf $releaseExpression 'push' 'refs/heads/feature/example' $true) 'Other branch pushes must not publish.'
 
-Write-Host 'MSIX signing workflow invariants passed; release if-expression scenarios: 8 passed.'
+Write-Host 'MSIX signing workflow invariants passed; release if-expression scenarios: 11 passed.'

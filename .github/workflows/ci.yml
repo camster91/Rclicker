@@ -37,6 +37,10 @@ jobs:
         shell: pwsh
         run: ./tools/test-msix-signing-workflow.ps1
 
+      - name: Test release publisher guards
+        shell: bash
+        run: ./tools/test-publish-release.sh
+
       - name: Restore
         run: dotnet restore RClicker.sln
 
@@ -149,8 +153,8 @@ jobs:
       artifact: rclicker-win-x64
       file-types: exe
 
-  # Signs the optional MSIX artifact with the same Azure OIDC workflow. It is
-  # retained as a separate artifact and is intentionally not a release input.
+  # Signs the MSIX artifact with the same Azure OIDC workflow. Main releases
+  # consume this verified artifact; preview releases retain their portable-only flow.
   sign-msix:
     needs: [build, relay]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.build.outputs.relay == 'true'
@@ -162,19 +166,20 @@ jobs:
       artifact: rclicker-msix-win-x64-unsigned
       file-types: msix
 
-  # Publishes the built rclicker.exe as a GitHub Release (direct download, no sign-in).
+  # Publishes the signed portable and MSIX artifacts as a GitHub Release (direct download, no sign-in).
   # main → release only when a manual run sets publish_release=true; claude/* branches
-  # retain their automatic vX.Y.Z-preview publication. Re-runs replace the files.
-  # Uses the signed file when signing ran; a failed signing publishes nothing.
+  # retain their automatic vX.Y.Z-preview publication. Preview re-runs replace their files;
+  # stable main releases are immutable and reject mismatched existing tags/releases.
   release:
-    needs: [build, relay, sign]
+    needs: [build, relay, sign, sign-msix]
     if: >-
       always() &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release == true && github.ref == 'refs/heads/main') ||
       (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/claude/'))) &&
       needs.build.result == 'success' && needs.relay.result == 'success' &&
       needs.build.outputs.relay == 'true' &&
-      (needs.sign.result == 'success' || needs.sign.result == 'skipped')
+      ((github.ref == 'refs/heads/main' && needs.sign.result == 'success' && needs.sign.outputs.signed == 'true' && needs['sign-msix'].result == 'success' && needs['sign-msix'].outputs.signed == 'true') ||
+      (startsWith(github.ref, 'refs/heads/claude/') && (needs.sign.result == 'success' || needs.sign.result == 'skipped')))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -186,40 +191,21 @@ jobs:
           name: ${{ needs.sign.outputs.signed == 'true' && 'rclicker-win-x64-signed' || 'rclicker-win-x64' }}
           path: dist
 
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.ref == 'refs/heads/main' && needs['sign-msix'].outputs.signed == 'true'
+        with:
+          name: rclicker-msix-win-x64-unsigned-signed
+          path: dist
+
+      - name: Read release version
+        id: version
+        shell: bash
+        run: echo "value=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)" >> "$GITHUB_OUTPUT"
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNED: ${{ needs.sign.outputs.signed == 'true' }}
-        run: |
-          version=$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)
-          # Only main publishes the real release; other branches get a separate preview
-          # pre-release so unmerged code never replaces what /download serves.
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            tag="v$version"; flags=""
-          else
-            tag="v$version-preview"; flags="--prerelease"
-          fi
-          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$SIGNED" = "true" ]; then
-            signing="Code-signed: right-click → Properties → Digital Signatures shows who signed it."
-          else
-            signing="Not code-signed yet: if Windows warns, choose More info → Run anyway."
-          fi
-          notes="Download **rclicker.exe**, double-click it, and scan the QR code with your phone. Works over the internet through the rclicker relay (no shared Wi-Fi needed). $signing"
-          (cd dist && zip -9 rclicker-win-x64.zip rclicker.exe)
-          if gh release view "$tag" >/dev/null 2>&1; then
-            if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$SIGNED" != "true" ]; then
-              # The owner may have replaced these files with copies signed on their own PC.
-              # Never overwrite a published main release with an unsigned build; bump <Version> to release again.
-              echo "::notice::Release $tag already exists; leaving its files unchanged."
-              exit 0
-            fi
-            gh release upload "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip --clobber
-            gh release edit "$tag" --notes "$notes" # re-runs may change signed/unsigned
-          else
-            gh release create "$tag" dist/rclicker.exe dist/rclicker-win-x64.zip \
-              --target "$GITHUB_SHA" --title "rclicker $version" $flags --notes "$notes"
-          fi
-          # Builds from main become the "latest" release that the website's /download serves.
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            gh release edit "$tag" --prerelease=false --latest
-          fi
+          MSIX_SIGNED: ${{ needs['sign-msix'].outputs.signed == 'true' }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: ./tools/publish-release.sh
