@@ -36,14 +36,25 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
+$repositoryFullPath = [IO.Path]::GetFullPath($repository).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+$outputDirectoryFullPath = $OutputDirectory.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+if ([string]::Equals($repositoryFullPath, $outputDirectoryFullPath, [StringComparison]::OrdinalIgnoreCase) -or
+    $repositoryFullPath.StartsWith("$outputDirectoryFullPath$([IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)) {
+    throw "OutputDirectory '$OutputDirectory' cannot be the repository root or one of its ancestors."
+}
+
 $payloadDirectory = Join-Path $OutputDirectory 'payload'
 $packagePath = Join-Path $OutputDirectory "rclicker-$architecture.msix"
 $manifestPath = Join-Path $payloadDirectory 'AppxManifest.xml'
 $sourceManifestPath = Join-Path $repository 'packaging/msix/AppxManifest.xml'
 $assetsPath = Join-Path $repository 'packaging/msix/Assets'
 
-if (Test-Path $OutputDirectory) {
-    Remove-Item $OutputDirectory -Recurse -Force
+New-Item $OutputDirectory -ItemType Directory -Force | Out-Null
+if (Test-Path $payloadDirectory) {
+    Remove-Item $payloadDirectory -Recurse -Force
+}
+if (Test-Path $packagePath) {
+    Remove-Item $packagePath -Force
 }
 New-Item $payloadDirectory -ItemType Directory -Force | Out-Null
 New-Item (Join-Path $payloadDirectory 'Assets') -ItemType Directory -Force | Out-Null

@@ -25,6 +25,8 @@ $certificate = $null
 $certificateFile = Join-Path $workDirectory 'rclicker-test.cer'
 $installedPackage = $null
 $script:runningProcess = $null
+$sourcePackagePath = $null
+$sourcePackageHash = $null
 
 function Find-Tool([string] $name) {
     $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -128,7 +130,12 @@ try {
         $firstPackage = Join-Path $firstOutput 'rclicker-x64.msix'
     }
     else {
-        $firstPackage = (Resolve-Path $PackagePath).Path
+        $sourcePackagePath = (Resolve-Path $PackagePath).Path
+        $sourcePackageHash = (Get-FileHash -LiteralPath $sourcePackagePath -Algorithm SHA256).Hash
+        New-Item $firstOutput -ItemType Directory -Force | Out-Null
+        $firstPackage = Join-Path $firstOutput 'rclicker-x64.msix'
+        Copy-Item -LiteralPath $sourcePackagePath -Destination $firstPackage
+        Assert-Equal $sourcePackageHash (Get-FileHash -LiteralPath $firstPackage -Algorithm SHA256).Hash 'The isolated MSIX copy changed during preparation.'
     }
 
     Push-Location $repository
@@ -190,6 +197,11 @@ try {
     Remove-AppxPackage -Package $installedPackage.PackageFullName
     $installedPackage = $null
     Assert-True (@(Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue).Count -eq 0) 'The MSIX package remained installed after uninstall.'
+    if ($null -ne $sourcePackagePath) {
+        $afterSourcePackageHash = (Get-FileHash -LiteralPath $sourcePackagePath -Algorithm SHA256).Hash
+        Assert-Equal $sourcePackageHash $afterSourcePackageHash 'The supplied unsigned MSIX changed during the lifecycle test.'
+        Write-Host 'Supplied unsigned MSIX remained byte-identical after the lifecycle test.'
+    }
     Write-Host 'MSIX install, full-trust manifest, packaged runtime, in-place update, and uninstall checks passed.'
 }
 finally {
