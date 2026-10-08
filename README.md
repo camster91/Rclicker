@@ -6,7 +6,13 @@ Turn your phone into a PowerPoint clicker. No app to install on the phone, and i
 2. Scan the QR code it shows with your phone's camera.
 3. Tap **Next**, **Previous**, **Start**, **Black** or **End**.
 
-**Download: [rclicker.exe](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe)** (latest release, Windows 10/11). All releases: https://github.com/camster91/Rclicker/releases
+Download the latest Windows build from GitHub:
+
+- [Portable EXE](https://github.com/camster91/Rclicker/releases/latest/download/rclicker.exe) — run it without installation.
+- [Portable ZIP](https://github.com/camster91/Rclicker/releases/latest/download/rclicker-win-x64.zip) — keep the EXE and its release archive together.
+- [MSIX installer](https://github.com/camster91/Rclicker/releases/latest/download/rclicker-win-x64.msix) — install it for a managed Windows PC.
+
+All releases: https://github.com/camster91/Rclicker/releases
 
 Managed Windows presentation PCs can use the optional [MSIX package](docs/msix.md); the portable EXE remains available for machines where installation is restricted.
 

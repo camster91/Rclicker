@@ -12,7 +12,7 @@ as the Windows release:
 - Identity name: `CameronAshley.Rclicker`
 - Publisher: `CN=Cameron Ashley, O=Cameron Ashley, L=Scarborough, S=on, C=CA`
 - Package version: the three-part product version plus a fourth component, for
-  example `0.2.4.0`
+  example `0.2.5.0`
 - Desktop entry point: `windows.fullTrustApplication`
 - Required capability: `runFullTrust`
 
@@ -22,6 +22,15 @@ uses the limited process-query API, the foreground-window checks, and
 continues to fail closed when the foreground process is unknown or is not
 PowerPoint. Packaging does not grant the phone or relay additional access to
 the PC.
+
+## Install the released package
+
+Download the [latest signed MSIX package](https://github.com/camster91/Rclicker/releases/latest/download/rclicker-win-x64.msix)
+from GitHub, then open it and choose **Install**. Windows verifies the package
+publisher before installation. The package keeps the stable
+`CameronAshley.Rclicker` identity, so a later release updates the existing
+installation in place. If your organization manages app installation, give
+the IT team the package publisher and identity above for allowlisting.
 
 ## Build and test on Windows
 
