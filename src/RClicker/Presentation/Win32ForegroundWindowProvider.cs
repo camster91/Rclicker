@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using RClicker.Native;
 
 namespace RClicker.Presentation;
@@ -27,15 +25,7 @@ internal sealed class Win32ForegroundWindowProvider : IForegroundWindowProvider
         _ = NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid != 0)
         {
-            try
-            {
-                using var process = Process.GetProcessById((int)pid);
-                processName = process.ProcessName;
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
-            {
-                // Process exited or is inaccessible; treat as unknown.
-            }
+            processName = NativeMethods.GetProcessName(pid);
         }
 
         return new ForegroundWindowInfo(processName, windowClass);

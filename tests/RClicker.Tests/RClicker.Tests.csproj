@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>RClicker.Tests</RootNamespace>
     <!-- Test naming and test-only patterns. -->
     <NoWarn>$(NoWarn);CA1707;CA1515;CA2234;CA1849;CA2000;CA1861;CA1822;CA1001</NoWarn>
@@ -24,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\RClicker.Core\RClicker.Core.csproj" />
+    <ProjectReference Include="..\..\src\RClicker\RClicker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

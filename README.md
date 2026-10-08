@@ -92,6 +92,9 @@ What IT may need to allow:
 
 If IT can only allow a company-owned domain, the relay can also run on your own domain (see [Running your own relay](#running-your-own-relay)).
 
+For a copy-ready explanation of the desktop program, network rule and signed
+publisher check, see the [guidance for IT teams](docs/for-it.md).
+
 ## Security
 
 - Each session has a **random 256-bit key**. It's in the QR code link (`…/remote#k=…`) after the `#`, which browsers never send to any server, so the relay never sees it.
@@ -165,7 +168,11 @@ dotnet test RClicker.sln -c Release
 dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 ```
 
-This produces one self-contained `rclicker.exe` (about 60 MB). Use `-r win-arm64` for ARM64 Windows. Add `-p:RelayUrl=https://<your relay>` to build in a relay address (official builds get it from the `RELAY_URL` repository secret); without one, the app needs `--relay`.
+This produces one self-contained, uncompressed `rclicker.exe` (about 130 MB; the
+release zip is smaller). Use `-r win-arm64` for ARM64 Windows. Add
+`-p:RelayUrl=https://<your relay>` to build in a relay address (official builds
+get it from the `RELAY_URL` repository secret); without one, the app needs
+`--relay`.
 
 Relay (use Node.js 22, as tested in CI):
 
