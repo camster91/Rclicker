@@ -66,9 +66,11 @@ must be signed by the configured production publisher, and the certificate's
 subject must exactly match the manifest `Publisher` value. On main pushes and
 manual runs from main, CI sends the unsigned MSIX artifact through the shared
 Azure OIDC signing workflow and uploads the verified result as a separate
-`rclicker-msix-win-x64-unsigned-signed` artifact. It is retained for production
-validation and is not included in the EXE release publication. Production
-distribution remains a release-owner gate.
+`rclicker-msix-win-x64-unsigned-signed` artifact. An explicitly approved main
+release publishes that signed package as `rclicker-win-x64.msix` alongside the
+signed portable EXE and ZIP. Stable releases are immutable: a rerun refuses to
+replace an existing tag or release whose source commit or version does not
+match.
 
 Keep the identity name and publisher unchanged for updates. Increase the
 four-part package version; Windows uses the higher version to update the

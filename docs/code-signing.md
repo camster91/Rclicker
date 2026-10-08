@@ -56,9 +56,9 @@ In [`.github/workflows/sign-windows.yml`](../.github/workflows/sign-windows.yml)
 | `AZURE_SIGNING_PROFILE` | e.g. `camster` |
 | `AZURE_SIGNING_PUBLISHER` | Exact verified certificate name, currently `Cameron Ashley` |
 
-Or send them to Claude to fill in. The next build of rclicker's `main` branch signs `rclicker.exe` and checks the signature; it does not publish a release automatically.
+Or send them to Claude to fill in. The next build of rclicker's `main` branch signs `rclicker.exe` and the MSIX package and checks both signatures; it does not publish a release automatically.
 
-A manual **Actions → CI → Run workflow** run from `main` builds, signs and verifies the workflow artifacts. Leave **Publish the portable EXE release after all checks pass** unchecked for artifact-only validation. Cameron must explicitly enable it for the main release job to publish after all gates pass. `claude/*` pushes retain their separate preview release behavior.
+A manual **Actions → CI → Run workflow** run from `main` builds, signs and verifies the workflow artifacts. Leave **Publish the portable EXE release after all checks pass** unchecked for artifact-only validation. Cameron must explicitly enable it for the main release job to publish the signed EXE, ZIP, MSIX, and checksums after all gates pass. Stable releases are immutable; a rerun rejects a mismatched existing tag or release instead of replacing its assets. `claude/*` pushes retain their separate preview release behavior.
 
 ## Allow a repository
 
