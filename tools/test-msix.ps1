@@ -150,7 +150,7 @@ try {
         -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') `
         -FriendlyName "rclicker MSIX lifecycle test $([guid]::NewGuid().ToString('N'))"
     Export-Certificate -Cert $certificate -FilePath $certificateFile | Out-Null
-    Import-Certificate -FilePath $certificateFile -CertStoreLocation 'Cert:\CurrentUser\TrustedPeople' | Out-Null
+    Import-Certificate -FilePath $certificateFile -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
 
     foreach ($packagePath in @($firstPackage, $updatePackage)) {
         & $signtool sign /fd SHA256 /sha1 $certificate.Thumbprint $packagePath
@@ -198,7 +198,7 @@ finally {
         Remove-AppxPackage -Package $installedPackage.PackageFullName -ErrorAction SilentlyContinue
     }
     if ($null -ne $certificate) {
-        Remove-Item "Cert:\CurrentUser\TrustedPeople\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue
+        Remove-Item "Cert:\LocalMachine\TrustedPeople\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue
         Remove-Item "Cert:\CurrentUser\My\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue
     }
     if (-not $KeepArtifacts -and (Test-Path $workDirectory)) {

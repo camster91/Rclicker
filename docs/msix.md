@@ -33,7 +33,7 @@ root, the unsigned package can be built with:
 ```
 
 The isolated lifecycle check creates a disposable code-signing certificate,
-trusts it only for the current test account, signs two temporary packages,
+trusts it only on the isolated test machine, signs two temporary packages,
 installs the first package, launches it through the Windows AppsFolder,
 installs the higher-version package as an in-place update, and uninstalls the
 package. It refuses to remove an existing installation with the same stable
@@ -43,10 +43,11 @@ identity:
 .\tools\test-msix.ps1
 ```
 
-The test removes its certificate and package in `finally` cleanup. Use a clean
-Windows test account or VM; it is deliberately isolated from a user's normal
-installation. CI runs the same check on `windows-latest` and also keeps the
-portable EXE package validation.
+The test removes its certificate and package in `finally` cleanup. It needs an
+elevated Windows test account because package trust is installed in the local
+machine `TrustedPeople` store. Use a clean Windows test account or VM; it is
+deliberately isolated from a user's normal installation. CI runs the same check
+on `windows-latest` and also keeps the portable EXE package validation.
 
 ## Signing and updates
 
