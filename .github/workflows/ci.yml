@@ -110,7 +110,9 @@ jobs:
         if: always()
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: |
+            **/TestResults/*.trx
+            **/TestResults/pdf-mode-*.png
           if-no-files-found: ignore
 
   relay:

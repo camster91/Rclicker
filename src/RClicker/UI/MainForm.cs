@@ -29,6 +29,8 @@ internal sealed class MainForm : Form
     private readonly Panel _qrHiddenPanel = new();
     private readonly TextBox _urlBox = new();
     private readonly CheckBox _powerPointOnlyBox = new();
+    private readonly ComboBox _targetBox = new();
+    private readonly Label _targetHint = new();
     private readonly Button _copyButton = new();
     private readonly System.Windows.Forms.Timer _expiryTimer = new() { Interval = 30_000 };
 
@@ -150,6 +152,7 @@ internal sealed class MainForm : Form
             ColumnCount = 1,
             Padding = new Padding(18, 14, 18, 14),
             BackColor = Color.White,
+            AutoScroll = true,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
@@ -216,7 +219,36 @@ internal sealed class MainForm : Form
         urlRow.Controls.Add(_urlBox, 0, 0);
         urlRow.Controls.Add(_copyButton, 1, 0);
 
-        _powerPointOnlyBox.Text = "Only send keys when PowerPoint is the active window (recommended)";
+        _targetBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _targetBox.Items.AddRange(["PowerPoint", "PDF — Adobe Acrobat/Reader or SumatraPDF"]);
+        _targetBox.Dock = DockStyle.Fill;
+        _targetBox.AccessibleName = "Presentation app";
+        _targetHint.AutoSize = true;
+        _targetHint.MaximumSize = new Size(420, 0);
+        _targetHint.ForeColor = Color.FromArgb(60, 60, 60);
+        _targetBox.SelectedIndexChanged += (_, _) =>
+        {
+            bool pdf = _targetBox.SelectedIndex == 1;
+            _controller.Target = pdf ? PresentationTarget.Pdf : PresentationTarget.PowerPoint;
+            if (pdf) _powerPointOnlyBox.Checked = true;
+            _powerPointOnlyBox.Enabled = !pdf;
+            _targetHint.Text = pdf
+                ? "Click the PDF document first. Next/Previous turn pages; Start toggles fullscreen; End exits. Black is unavailable."
+                : "Click on PowerPoint, then use the phone controls.";
+        };
+        _targetBox.SelectedIndex = 0;
+        var targetPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3,
+        };
+        targetPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        targetPanel.Controls.Add(new Label { Text = "Presentation app", AutoSize = true });
+        targetPanel.Controls.Add(_targetBox);
+        targetPanel.Controls.Add(_targetHint);
+        targetPanel.SizeChanged += (_, _) =>
+            _targetHint.MaximumSize = new Size(Math.Max(1, targetPanel.ClientSize.Width - 6), 0);
+
+        _powerPointOnlyBox.Text = "Only send keys to the selected app (recommended)";
         _powerPointOnlyBox.Checked = true;
         _powerPointOnlyBox.AutoSize = true;
         _powerPointOnlyBox.MaximumSize = new Size(420, 0);
@@ -267,9 +299,11 @@ internal sealed class MainForm : Form
         layout.Controls.Add(_hintLabel, 0, 2);
         layout.Controls.Add(qrHost, 0, 3);
         layout.Controls.Add(urlRow, 0, 4);
-        layout.Controls.Add(_powerPointOnlyBox, 0, 5);
-        layout.Controls.Add(buttons, 0, 6);
-        layout.Controls.Add(version, 0, 7);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(targetPanel, 0, 5);
+        layout.Controls.Add(_powerPointOnlyBox, 0, 6);
+        layout.Controls.Add(buttons, 0, 7);
+        layout.Controls.Add(version, 0, 8);
 
         Controls.Add(layout);
     }
@@ -413,12 +447,16 @@ internal sealed class MainForm : Form
     {
         const string help =
             "Using it\n" +
-            "1. Open your presentation in PowerPoint.\n" +
+            "1. Choose PowerPoint or PDF in Presentation app. Open the document.\n" +
             "2. Scan the QR code with your phone camera (mobile data is fine).\n" +
-            "3. Click on the PowerPoint window so it is active, then use the phone.\n\n" +
+            "3. Click the presentation document so it is active, then use the phone.\n\n" +
             "Stuck on 'Offline' or 'Connecting'?\n" +
             "• This computer needs internet access. Corporate proxies are used automatically.\n" +
             "• Your network may block the relay address. Ask IT to allow it (HTTPS and WebSockets on port 443).\n\n" +
+            "PDF mode\n" +
+            "• Supports Adobe Acrobat/Reader and SumatraPDF. Click the PDF document first.\n" +
+            "• Start toggles fullscreen, Next/Previous turn pages, End exits. Black is unavailable.\n" +
+            "• PDFs in Edge/Chrome use the separate browser presenter.\n\n" +
             "PowerPoint doesn't react?\n" +
             "• PowerPoint must be the active window. Click on it once.\n" +
             "• If PowerPoint runs as administrator, run rclicker as administrator too.";
