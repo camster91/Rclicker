@@ -123,4 +123,4 @@ Cloudflare Workers Free plan: 100,000 requests a day, and SQLite-backed Durable 
 
 ## Packaging
 
-`dotnet publish -c Release -r win-x64` produces one self-contained, compressed `rclicker.exe` with the relay address built in (`-p:RelayUrl=…`; CI takes it from the `RELAY_URL` secret). The relay deploys with `npx wrangler deploy --keep-vars` from `relay/`.
+`dotnet publish -c Release -r win-x64` produces one self-contained, uncompressed `rclicker.exe` with the relay address built in (`-p:RelayUrl=…`; CI takes it from the `RELAY_URL` secret). Keeping single-file compression off makes the signed payload easier for endpoint scanners to inspect. The relay deploys with `npx wrangler deploy --keep-vars` from `relay/`.

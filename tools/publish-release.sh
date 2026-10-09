@@ -49,11 +49,11 @@ notes="Download **rclicker.exe** for the portable app, or **rclicker-win-x64.msi
 (cd "$DIST_DIR" && zip -9 -j rclicker-win-x64.zip rclicker.exe)
 
 if [ "$GITHUB_REF" = "$MAIN_REF" ]; then
-  (cd "$DIST_DIR" && sha256sum rclicker.exe rclicker-win-x64.zip rclicker-win-x64.msix > SHA256SUMS.txt)
+  (cd "$DIST_DIR" && sha256sum rclicker.exe rclicker-win-x64.zip rclicker-win-x64.msix > sha256.txt)
 fi
 
 release_json=""
-if release_json="$(gh release view "$tag" --json tagName,name,isPrerelease 2>/dev/null)"; then
+if release_json="$(gh release view "$tag" --json tagName,name,isPrerelease,assets 2>/dev/null)"; then
   release_exists=true
 else
   release_exists=false
@@ -84,11 +84,19 @@ if [ "$GITHUB_REF" = "$MAIN_REF" ]; then
       echo "::error::Stable release $tag has a mismatched name, tag, or prerelease state; refusing to replace it." >&2
       exit 1
     fi
+
+    for required_asset in rclicker.exe rclicker-win-x64.zip rclicker-win-x64.msix sha256.txt; do
+      if ! jq -e --arg name "$required_asset" '.assets // [] | any(.name == $name)' <<<"$release_json" >/dev/null; then
+        echo "::error::Stable release $tag is missing required asset $required_asset; refusing to treat it as complete or replace its immutable files." >&2
+        exit 1
+      fi
+    done
+
     echo "::notice::Stable release $tag already matches source $GITHUB_SHA and version $RELEASE_VERSION; leaving its assets unchanged."
     exit 0
   fi
 
-  gh release create "$tag" "$DIST_DIR/rclicker.exe" "$DIST_DIR/rclicker-win-x64.zip" "$DIST_DIR/rclicker-win-x64.msix" "$DIST_DIR/SHA256SUMS.txt" \
+  gh release create "$tag" "$DIST_DIR/rclicker.exe" "$DIST_DIR/rclicker-win-x64.zip" "$DIST_DIR/rclicker-win-x64.msix" "$DIST_DIR/sha256.txt" \
     --target "$GITHUB_SHA" --title "rclicker $RELEASE_VERSION" --notes "$notes"
   gh release edit "$tag" --prerelease=false --latest
   exit 0
