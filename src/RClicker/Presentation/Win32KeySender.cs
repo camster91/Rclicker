@@ -22,8 +22,12 @@ internal sealed class Win32KeySender : IKeySender
             if (key == PresentationKey.ControlL && sent > 0)
             {
                 // A partial chord must not leave Ctrl held down for the user's next key.
-                var release = new[] { KeyInput(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP) };
-                _ = NativeMethods.SendInput(1, release, InputSize);
+                var release = new[]
+                {
+                    KeyInput(NativeMethods.VK_L, 0, NativeMethods.KEYEVENTF_KEYUP),
+                    KeyInput(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP),
+                };
+                _ = NativeMethods.SendInput((uint)release.Length, release, InputSize);
             }
             failureReason = $"Windows blocked the key press (error {error}). If the presentation app runs as administrator, run rclicker as administrator too.";
             return false;
