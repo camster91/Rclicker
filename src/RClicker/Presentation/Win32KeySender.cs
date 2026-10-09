@@ -4,7 +4,7 @@ using RClicker.Native;
 namespace RClicker.Presentation;
 
 /// <summary>
-/// Presses one of the five allowed keys using the Win32 SendInput API. The input goes to
+/// Presses a fixed allowed key or chord using the Win32 SendInput API. The input goes to
 /// the foreground window, exactly like a USB presentation clicker.
 /// </summary>
 internal sealed class Win32KeySender : IKeySender
@@ -13,12 +13,45 @@ internal sealed class Win32KeySender : IKeySender
 
     public bool TrySend(PresentationKey key, out string? failureReason)
     {
+        var inputs = BuildInputs(key);
+
+        uint sent = NativeMethods.SendInput((uint)inputs.Length, inputs, InputSize);
+        if (sent != inputs.Length)
+        {
+            int error = Marshal.GetLastPInvokeError();
+            if (key == PresentationKey.ControlL && sent > 0)
+            {
+                // A partial chord must not leave Ctrl held down for the user's next key.
+                var release = new[] { KeyInput(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP) };
+                _ = NativeMethods.SendInput(1, release, InputSize);
+            }
+            failureReason = $"Windows blocked the key press (error {error}). If the presentation app runs as administrator, run rclicker as administrator too.";
+            return false;
+        }
+
+        failureReason = null;
+        return true;
+    }
+
+    internal static NativeMethods.INPUT[] BuildInputs(PresentationKey key)
+    {
+        if (key == PresentationKey.ControlL)
+        {
+            return [
+                KeyInput(NativeMethods.VK_CONTROL, 0, 0),
+                KeyInput(NativeMethods.VK_L, 0, 0),
+                KeyInput(NativeMethods.VK_L, 0, NativeMethods.KEYEVENTF_KEYUP),
+                KeyInput(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP),
+            ];
+        }
         var (vk, extended) = key switch
         {
             PresentationKey.RightArrow => (NativeMethods.VK_RIGHT, true),
             PresentationKey.LeftArrow => (NativeMethods.VK_LEFT, true),
             PresentationKey.F5 => (NativeMethods.VK_F5, false),
             PresentationKey.B => (NativeMethods.VK_B, false),
+            PresentationKey.PageDown => (NativeMethods.VK_NEXT, true),
+            PresentationKey.PageUp => (NativeMethods.VK_PRIOR, true),
             PresentationKey.Escape => (NativeMethods.VK_ESCAPE, false),
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, null),
         };
@@ -27,22 +60,12 @@ internal sealed class Win32KeySender : IKeySender
         uint flags = extended ? NativeMethods.KEYEVENTF_EXTENDEDKEY : 0;
 
         // Key down and key up in one call so nothing else can interleave.
-        var inputs = new[]
+        return new[]
         {
             KeyInput(vk, scan, flags),
             KeyInput(vk, scan, flags | NativeMethods.KEYEVENTF_KEYUP),
         };
 
-        uint sent = NativeMethods.SendInput((uint)inputs.Length, inputs, InputSize);
-        if (sent != inputs.Length)
-        {
-            int error = Marshal.GetLastPInvokeError();
-            failureReason = $"Windows blocked the key press (error {error}). If PowerPoint runs as administrator, run rclicker as administrator too.";
-            return false;
-        }
-
-        failureReason = null;
-        return true;
     }
 
     private static NativeMethods.INPUT KeyInput(ushort vk, ushort scan, uint flags) => new()

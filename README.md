@@ -63,7 +63,8 @@ The phone buttons work the same: Next, Previous, Start (back to slide 1), Black,
 
 - **QR code + link**: what the phone opens. The QR code hides itself while a phone is connected, so the audience can't scan it off the projector (click **Show QR code** to see it again).
 - **Status**: `Connecting…`, `Ready`, `Connected — iPhone`, `Reconnecting…`, or `Offline` with the reason.
-- **Only send keys when PowerPoint is the active window**: on by default. Turn it off to use the remote with another app (a PDF viewer, a browser slideshow).
+- **Presentation app**: select PowerPoint (default) or **PDF — Adobe Acrobat/Reader or SumatraPDF**. In PDF mode, click the document first: Next/Previous send Page Down/Page Up, Start sends Ctrl+L to toggle fullscreen, and End sends Escape. Black is unavailable. Other applications and browser tabs are rejected in PDF mode even if the PowerPoint restriction was previously turned off.
+- **Only send keys to the selected app**: on by default. PowerPoint mode retains the optional unrestricted setting for other presentation tools; PDF mode always protects its foreground target. PDFs opened in Edge/Chrome can use the separate browser presenter instead.
 - **New session**: makes a new QR code. The old one stops working and any connected phone is disconnected.
 - **Copy**, **Help**, **Quit**.
 
