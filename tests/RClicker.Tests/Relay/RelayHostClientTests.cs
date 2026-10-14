@@ -338,6 +338,35 @@ public sealed class RelayHostClientTests : IAsyncLifetime
         Assert.False(string.IsNullOrWhiteSpace(client.Status.Error));
     }
 
+    [Theory]
+    [InlineData(200, "instead of upgrading")]
+    [InlineData(302, "redirected")]
+    [InlineData(401, "denied access")]
+    [InlineData(403, "denied access")]
+    [InlineData(404, "refused")]
+    [InlineData(503, "refused")]
+    public async Task HttpUpgradeRefusal_ReportsActualStatusWithoutBlamingNetwork(int status, string explanation)
+    {
+        await using var relay = await FakeRelay.StartAsync(refusalStatus: status);
+        await using var client = new RelayHostClient(
+            new RelayClientOptions(relay.Url) { ConnectTimeout = TimeSpan.FromSeconds(5) },
+            new SessionManager(), new CommandRouter(new FakePresentationController()));
+        var offline = new TaskCompletionSource<RelayStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.StatusChanged += (_, value) =>
+        {
+            if (value.State == RelayState.Offline) offline.TrySetResult(value);
+        };
+        client.Start();
+        var result = await offline.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await client.StopAsync();
+
+        Assert.Contains($"HTTP {status}", result.Error, StringComparison.Ordinal);
+        Assert.Contains(explanation, result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("network", result.Error!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(relay.Url.ToString(), result.Error!, StringComparison.Ordinal);
+        Assert.DoesNotContain("Private diagnostic fixture body", result.Error!, StringComparison.Ordinal);
+    }
+
     private async Task<(FakeRelay.HostConnection Host, FakePhone Phone)> ConnectPhoneAsync()
     {
         var host = await _relay.NextHostAsync();

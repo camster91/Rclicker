@@ -175,7 +175,20 @@ public sealed class RelayHostClient : IAsyncDisposable
         using (var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
         {
             connectTimeout.CancelAfter(_options.ConnectTimeout);
-            await socket.ConnectAsync(RelayUrls.HostSocketUrl(_options.Relay, keys.RoomId), connectTimeout.Token);
+            try
+            {
+                await socket.ConnectAsync(RelayUrls.HostSocketUrl(_options.Relay, keys.RoomId), connectTimeout.Token);
+            }
+            catch (WebSocketException ex) when ((int)socket.HttpStatusCode > 0
+                && socket.HttpStatusCode != HttpStatusCode.SwitchingProtocols)
+            {
+                // A completed HTTP refusal is different from a transport failure.
+                // Retain only its status: response headers, bodies and URLs can
+                // contain sign-in details and never belong in the status or log.
+                throw new HttpRequestException(
+                    $"The relay refused the WebSocket upgrade (HTTP {(int)socket.HttpStatusCode}).",
+                    ex, socket.HttpStatusCode);
+            }
         }
 
         lock (_gate)
@@ -485,6 +498,7 @@ public sealed class RelayHostClient : IAsyncDisposable
     private ClientWebSocket CreateSocket()
     {
         var socket = new ClientWebSocket();
+        socket.Options.CollectHttpResponseDetails = true;
         socket.Options.KeepAliveInterval = _options.KeepAliveInterval;
         socket.Options.KeepAliveTimeout = _options.KeepAliveTimeout;
         socket.Options.SetRequestHeader("User-Agent", $"rclicker/{AppInfo.Version}");
@@ -565,8 +579,11 @@ public sealed class RelayHostClient : IAsyncDisposable
     {
         OperationCanceledException or TimeoutException => "The relay did not answer in time. Retrying…",
         WebSocketException { InnerException: HttpRequestException http } => Explain(http),
+        HttpRequestException { StatusCode: HttpStatusCode.OK } => "The relay returned HTTP 200 instead of upgrading to WebSocket. Check the relay address and access requirements. Retrying…",
+        HttpRequestException { StatusCode: { } status } when (int)status is >= 300 and < 400 => $"The relay connection was redirected (HTTP {(int)status}). Check the relay address and access requirements. Retrying…",
+        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } denied => $"The relay denied access (HTTP {(int)denied.StatusCode!.Value}). Check the relay's sign-in or access requirements. Retrying…",
         HttpRequestException { StatusCode: HttpStatusCode.ProxyAuthenticationRequired } => "The network proxy refused the connection (proxy sign-in needed). Retrying…",
-        HttpRequestException { StatusCode: HttpStatusCode.Forbidden } => "The network blocked the relay address. Ask IT to allow it. Retrying…",
+        HttpRequestException { StatusCode: { } status } => $"The relay refused the WebSocket connection (HTTP {(int)status}). Retrying…",
         HttpRequestException { InnerException: System.Security.Authentication.AuthenticationException } => "A secure (HTTPS) connection to the relay failed. Retrying…",
         HttpRequestException => "Can't reach the relay. Check the internet connection. Retrying…",
         WebSocketException => "The network does not allow the relay connection (WebSocket). Retrying…",

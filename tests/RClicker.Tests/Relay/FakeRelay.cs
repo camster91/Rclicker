@@ -25,18 +25,24 @@ internal sealed class FakeRelay : IAsyncDisposable
     private readonly Channel<HostConnection> _hosts = Channel.CreateUnbounded<HostConnection>();
     private readonly System.Collections.Concurrent.ConcurrentBag<HostConnection> _connections = [];
 
-    private FakeRelay(WebApplication app) => _app = app;
+    private readonly int? _refusalStatus;
+
+    private FakeRelay(WebApplication app, int? refusalStatus)
+    {
+        _app = app;
+        _refusalStatus = refusalStatus;
+    }
 
     public Uri Url { get; private set; } = null!;
 
-    public static async Task<FakeRelay> StartAsync()
+    public static async Task<FakeRelay> StartAsync(int? refusalStatus = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.Services.Configure<Microsoft.Extensions.Hosting.HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(1));
         builder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, 0));
         var app = builder.Build();
-        var relay = new FakeRelay(app);
+        var relay = new FakeRelay(app, refusalStatus);
         app.UseWebSockets();
         app.Run(relay.HandleAsync);
         await app.StartAsync();
@@ -64,6 +70,16 @@ internal sealed class FakeRelay : IAsyncDisposable
 
     private async Task HandleAsync(HttpContext context)
     {
+        if (_refusalStatus is { } status)
+        {
+            // An HTTP response rather than a WebSocket upgrade. Deliberately
+            // omit Location: redirect diagnostics never contact another host.
+            context.Response.StatusCode = status;
+            context.Response.ContentType = "text/html";
+            await context.Response.WriteAsync("<html>Private diagnostic fixture body</html>");
+            return;
+        }
+
         if (context.Request.Path != "/ws/host" || !context.WebSockets.IsWebSocketRequest)
         {
             context.Response.StatusCode = 404;
