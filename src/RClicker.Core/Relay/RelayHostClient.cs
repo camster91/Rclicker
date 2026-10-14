@@ -33,6 +33,7 @@ public sealed class RelayHostClient : IAsyncDisposable
     private Task? _loop;
     private ClientWebSocket? _socket;
     private CancellationTokenSource? _sessionCts;
+    private int _sessionGeneration;
     private RelayStatus _status = RelayStatus.Connecting;
 
     public RelayHostClient(RelayClientOptions options, SessionManager sessions, CommandRouter router, ILogger<RelayHostClient>? logger = null)
@@ -116,6 +117,7 @@ public sealed class RelayHostClient : IAsyncDisposable
             lock (_gate)
             {
                 _sessionCts = sessionCts;
+                _sessionGeneration = session.Generation;
             }
 
             if (session != _sessions.Current)
@@ -419,26 +421,37 @@ public sealed class RelayHostClient : IAsyncDisposable
     private void OnSessionChanged(object? sender, RemoteSession session)
     {
         // End the old room (its phone sees "Session ended"), then let the loop start the new one.
-        _ = Task.Run(async () =>
-        {
-            await SendEndAsync("regenerated");
-            CancellationTokenSource? cts;
-            lock (_gate)
-            {
-                cts = _sessionCts;
-            }
-
-            try
-            {
-                cts?.Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-        });
+        _ = EndReplacedSessionAsync(session);
     }
 
-    private async Task SendEndAsync(string reason)
+    internal async Task EndReplacedSessionAsync(RemoteSession session)
+    {
+        ClientWebSocket? socket;
+        CancellationTokenSource? cts;
+        lock (_gate)
+        {
+            // Events can arrive after the loop has already moved on, including
+            // when a relay close itself regenerated the session. Never end the
+            // replacement (or a later generation) for a delayed earlier event.
+            if (_sessionGeneration >= session.Generation) return;
+            socket = _socket;
+            cts = _sessionCts;
+        }
+
+        // Bind both resources before the first await. A reconnect while this
+        // send waits must not turn cleanup of the old room into cancellation
+        // of whichever connection happens to be current afterwards.
+        await SendEndAsync(socket, "regenerated");
+        try
+        {
+            cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private Task SendEndAsync(string reason)
     {
         ClientWebSocket? socket;
         lock (_gate)
@@ -446,6 +459,11 @@ public sealed class RelayHostClient : IAsyncDisposable
             socket = _socket;
         }
 
+        return SendEndAsync(socket, reason);
+    }
+
+    private async Task SendEndAsync(ClientWebSocket? socket, string reason)
+    {
         if (socket is null || socket.State != WebSocketState.Open)
         {
             return;
