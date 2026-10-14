@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using RClicker.Presentation;
 using RClicker.Relay;
@@ -201,6 +202,66 @@ public sealed class RelayHostClientTests : IAsyncLifetime
         Assert.Equal("shutdown", end.GetProperty("reason").GetString());
         Assert.Equal(RelayState.Stopped, _client.Status.State);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DelayedSessionCleanup_DoesNotEndOrCancelTheNewConnection(bool delayBeforeCapture)
+    {
+        await using var relay = await FakeRelay.StartAsync();
+        var sessions = new SessionManager();
+        var eventEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Hold the event before the client's handler, after Current has advanced.
+        sessions.SessionChanged += (_, _) =>
+        {
+            eventEntered.TrySetResult();
+            releaseEvent.Task.GetAwaiter().GetResult();
+        };
+        await using var client = new RelayHostClient(
+            new RelayClientOptions(relay.Url) { MaxBackoff = TimeSpan.FromMilliseconds(20) },
+            sessions, new CommandRouter(new FakePresentationController()));
+        client.Start();
+        var oldHost = await relay.NextHostAsync();
+        await oldHost.ReceiveAsync();
+        var sendLock = PrivateField<SemaphoreSlim>(client, "_sendLock");
+        var oldCts = PrivateField<CancellationTokenSource>(client, "_sessionCts");
+        await sendLock.WaitAsync();
+        var sendLockHeld = true;
+        var regeneration = Task.Run(sessions.Regenerate);
+        Task? cleanup = null;
+        try
+        {
+            await eventEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (!delayBeforeCapture)
+                cleanup = client.EndReplacedSessionAsync(sessions.Current);
+            // Closing the old connection lets the loop start the new generation
+            // while the old cleanup is queued or suspended at the send lock.
+            oldHost.Abort();
+            var newHost = await relay.NextHostAsync();
+            var newCts = PrivateField<CancellationTokenSource>(client, "_sessionCts");
+            Assert.NotSame(oldCts, newCts);
+            if (delayBeforeCapture)
+                cleanup = client.EndReplacedSessionAsync(sessions.Current);
+            sendLock.Release();
+            sendLockHeld = false;
+            await cleanup!.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(newCts.IsCancellationRequested);
+            var claim = (await newHost.ReceiveAsync())!.Value;
+            Assert.Equal("claim", claim.GetProperty("t").GetString());
+            Assert.Equal(RelayKeys.Derive(sessions.Current.Token).RoomId, newHost.Room);
+            await newHost.AssertSilentAsync(); // No stale "end" sent to the new socket.
+        }
+        finally
+        {
+            if (sendLockHeld) sendLock.Release();
+            releaseEvent.TrySetResult();
+            await regeneration.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    private static T PrivateField<T>(RelayHostClient client, string name) where T : class =>
+        (T)typeof(RelayHostClient).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
 
     [Fact]
     public async Task RelayEndingTheRoom_StartsAFreshSession()
