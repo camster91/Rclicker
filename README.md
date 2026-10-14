@@ -173,6 +173,7 @@ Windows app (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
 
 ```bash
 dotnet test RClicker.sln -c Release
+dotnet format style RClicker.sln --diagnostics IDE0005 IDE0051 IDE0052 IDE0035 --severity info --verify-no-changes
 dotnet publish src/RClicker/RClicker.csproj -c Release -r win-x64 -o artifacts/publish/win-x64
 ```
 

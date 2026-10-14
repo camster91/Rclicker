@@ -1,0 +1,2 @@
+# Release scripts run under Bash on Windows and Linux.
+*.sh text eol=lf
