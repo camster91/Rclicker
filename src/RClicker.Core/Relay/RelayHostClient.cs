@@ -397,7 +397,9 @@ public sealed class RelayHostClient : IAsyncDisposable
                 return Freshness.StaleNonce;
             }
 
-            if (!root.TryGetProperty("id", out var id) || !id.TryGetInt64(out var value))
+            if (!root.TryGetProperty("id", out var id)
+                || id.ValueKind != JsonValueKind.Number
+                || !id.TryGetInt64(out var value))
             {
                 return Freshness.Invalid;
             }

@@ -159,6 +159,29 @@ public sealed class RelayHostClientTests : IAsyncLifetime
         Assert.Single(_controller.Calls);
     }
 
+    [Theory]
+    [InlineData("\"1\"")]
+    [InlineData("null")]
+    [InlineData("true")]
+    [InlineData("{}")]
+    [InlineData("[]")]
+    public async Task NonNumericCommandId_IsRejectedWithoutDisconnectingPhone(string idJson)
+    {
+        var (_, phone) = await ConnectPhoneAsync();
+        using var document = JsonDocument.Parse(idJson);
+        await phone.SendAsync(new { type = "presentation.next", id = document.RootElement, nonce = phone.Nonce });
+
+        var error = await phone.ReceiveSecureAsync();
+        Assert.Equal("error", error.GetProperty("type").GetString());
+        Assert.Equal("malformed", error.GetProperty("code").GetString());
+        Assert.Empty(_controller.Calls);
+        Assert.Equal(RelayState.PhoneConnected, _client.Status.State);
+
+        await phone.SendCommandAsync("presentation.next", 1);
+        Assert.Equal("ok", (await phone.ReceiveSecureAsync()).GetProperty("status").GetString());
+        Assert.Single(_controller.Calls);
+    }
+
     [Fact]
     public async Task PhoneDropping_ShowsReconnecting_ThenReady()
     {
