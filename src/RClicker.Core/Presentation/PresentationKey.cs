@@ -8,9 +8,12 @@ public enum PresentationKey
     F5,
     B,
     Escape,
+    PageDown,
+    PageUp,
+    ControlL,
 }
 
-/// <summary>Sends a single key press (down + up) to whatever window has keyboard focus.</summary>
+/// <summary>Sends a fixed key or chord (down + up) to whatever window has keyboard focus.</summary>
 public interface IKeySender
 {
     /// <summary>Returns false with a short reason if the key could not be sent.</summary>

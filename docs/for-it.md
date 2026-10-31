@@ -10,9 +10,12 @@ shown by the program.
   on port 443. The exact hostname is the one in the QR link and the phone page;
   it can also be supplied with `--relay` for an organisation's own relay.
 - It has no inbound listener, service, driver, scheduled task, or firewall rule.
-- The phone can send only five fixed presentation commands: Right Arrow, Left
-  Arrow, F5, B, and Escape. By default the desktop program sends them only when
-  PowerPoint is the foreground application. If Windows cannot identify the
+- The phone can send only five fixed semantic presentation commands. PowerPoint
+  mode maps them to Right Arrow, Left Arrow, F5, B, and Escape. PDF mode permits
+  only Acrobat/Reader and SumatraPDF, maps navigation to Page Down/Page Up, Start
+  to Ctrl+L and End to Escape, and rejects Black. PDF mode never permits keys to
+  other applications or browser tabs. By default PowerPoint mode sends keys only
+  when PowerPoint is the foreground application. If Windows cannot identify the
   foreground process, it fails closed and sends no key.
 - The phone and PC exchange end-to-end encrypted commands. The relay coordinates
   the room but does not receive the session key or readable commands.
