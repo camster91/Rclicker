@@ -1,0 +1,33 @@
+name: Export tested relay bundle
+on:
+  push:
+    branches: [release/relay-bundle-v0.2.9]
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx --no-install wrangler deploy --dry-run --outdir dist
+      - name: Export Worker modules
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import zlib from 'node:zlib';
+          const files = Object.fromEntries(fs.readdirSync('dist',{recursive:true,withFileTypes:true})
+            .filter(e=>e.isFile() && !e.name.endsWith('.map') && e.name!=='README.md')
+            .map(e=>{const path=e.parentPath.slice(4)+e.name;return [path,fs.readFileSync(e.parentPath+'/'+e.name,'utf8')]}));
+          const b=zlib.gzipSync(JSON.stringify(files)).toString('base64');
+          for(let i=0;i<b.length;i+=4000)console.log('RELAY_BUNDLE_'+i+'='+b.slice(i,i+4000));
+          NODE
