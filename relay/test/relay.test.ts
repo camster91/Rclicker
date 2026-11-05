@@ -1,6 +1,6 @@
 import { SELF, env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { Close, HOST_GONE_MS, HOST_NOTIFY_MS, PING, PONG, deviceLabel, randomId, sha256Base64Url } from '../src/protocol';
+import { Close, HOST_GONE_MS, HOST_NOTIFY_MS, MAX_ROOM_MS, PING, PONG, deviceLabel, randomId, sha256Base64Url } from '../src/protocol';
 
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15';
 const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/140.0 Mobile';
@@ -404,12 +404,29 @@ describe('one phone at a time', () => {
 });
 
 describe('ending a session', () => {
+  it('expires both peers so a browser presenter can create a fresh session', async () => {
+    const r = await newRoom();
+    const { pc, p } = await connected(r);
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(r.room));
+    await runInDurableObject(stub, async (_instance, state) => {
+      const info = await state.storage.get<Record<string, unknown>>('info');
+      await state.storage.put('info', { ...info, createdAt: Date.now() - MAX_ROOM_MS - 1 });
+    });
+
+    await runDurableObjectAlarm(stub);
+    expect(await p.closed).toBe(Close.SessionEnded);
+    expect(await pc.closed).toBe(Close.SessionEnded);
+    const again = await phone(r);
+    expect(await again.closed).toBe(Close.SessionEnded);
+  });
+
   it('New session: phone is told the session ended and the old QR stops working', async () => {
     const r = await newRoom();
     const { pc, p } = await connected(r);
 
     pc.send({ t: 'end', reason: 'regenerated' });
     expect(await p.closed).toBe(Close.SessionEnded);
+    expect(await pc.closed).toBe(1000);
 
     const again = await phone(r);
     expect(await again.closed).toBe(Close.SessionEnded);
@@ -423,6 +440,7 @@ describe('ending a session', () => {
 
     pc.send({ t: 'end', reason: 'shutdown' });
     expect(await p.closed).toBe(Close.ReceiverClosed);
+    expect(await pc.closed).toBe(1000);
   });
 });
 

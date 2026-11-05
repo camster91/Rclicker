@@ -5,6 +5,65 @@ const { readFileSync } = require('node:fs');
 const { webcrypto } = require('node:crypto');
 const { runInNewContext } = require('node:vm');
 
+test('browser presenter replaces an expired room with a fresh QR and host claim', async () => {
+  const element = () => ({
+    textContent: '', hidden: false, dataset: {}, width: 256, style: {},
+    classList: { add() {}, remove() {} },
+    addEventListener() {}, focus() {},
+    getContext: () => ({ fillRect() {} })
+  });
+  const ids = new Map();
+  const sockets = [];
+  class Socket {
+    static OPEN = 1;
+    readyState = 0;
+    sent = [];
+    constructor(url) { this.url = url; sockets.push(this); }
+    send(message) { this.sent.push(JSON.parse(message)); }
+    close() { this.readyState = 3; }
+    expire() {
+      this.readyState = 3;
+      this.onclose({ code: 4401 });
+    }
+  }
+  const script = readFileSync(require('node:path').join(__dirname, '../public/present.js.txt'), 'utf8')
+    .replace(/^import .*;\n/gm, '')
+    .replace(/import\.meta\.url/g, 'document.baseURI');
+  runInNewContext(script, {
+    crypto: webcrypto, TextEncoder, TextDecoder, Uint8Array, URL, atob, btoa,
+    performance, WebSocket: Socket, navigator: {},
+    window: { isSecureContext: true, addEventListener() {} },
+    document: {
+      baseURI: 'https://relay.test/present', addEventListener() {},
+      getElementById(id) {
+        if (!ids.has(id)) ids.set(id, element());
+        return ids.get(id);
+      }
+    },
+    pdfjs: { GlobalWorkerOptions: {} },
+    qrcode: () => ({ addData() {}, make() {}, getModuleCount: () => 21, isDark: () => false }),
+    setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {}
+  });
+  const waitForSocket = async (count) => {
+    const deadline = Date.now() + 2000;
+    while (sockets.length < count && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(sockets.length, count);
+    const socket = sockets[count - 1];
+    socket.readyState = Socket.OPEN;
+    socket.onopen();
+    return socket;
+  };
+  const first = await waitForSocket(1);
+  first.expire();
+  const replacement = await waitForSocket(2);
+  assert.notEqual(replacement.url, first.url, 'expiry must generate a different room');
+  assert.notEqual(replacement.sent[0].hostKey, first.sent[0].hostKey);
+  assert.equal(replacement.sent[0].t, 'claim');
+  assert.match(ids.get('notice').textContent, /QR code expired/);
+});
+
 test('phone shows disconnect, disables taps, and accepts a fresh encrypted hello', async () => {
   const element = () => ({
     textContent: '', hidden: true, attributes: {}, listeners: {},
