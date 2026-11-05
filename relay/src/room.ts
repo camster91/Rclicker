@@ -159,6 +159,9 @@ export class Room extends DurableObject<Env> {
         }
       } else if (now - info.createdAt >= MAX_ROOM_MS) {
         await this.endRoom(info, Close.SessionEnded, 'session expired');
+        // The presenter regenerates its QR after an expiry close. Keep explicit
+        // host-initiated end/shutdown handling separate from this hard timeout.
+        for (const host of this.sockets('host')) this.closeSocket(host, Close.SessionEnded, 'session expired');
       } else if (info.hostLeftAt !== undefined && this.sockets('host').length === 0 && now - info.hostLeftAt >= HOST_GONE_MS) {
         await this.endRoom(info, Close.ReceiverClosed, 'computer offline');
       } else if (info.hostLeftAt !== undefined && !info.hostOfflineNotified && this.sockets('host').length === 0 && now - info.hostLeftAt >= HOST_NOTIFY_MS) {
