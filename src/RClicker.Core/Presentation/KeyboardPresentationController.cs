@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RClicker.Presentation;
 
 /// <summary>
-/// Version 0.1 controller: turns semantic commands into PowerPoint keyboard shortcuts.
+/// Turns semantic commands into shortcuts for the selected presentation app.
 /// Platform specifics (SendInput, foreground window lookup) are injected.
 /// </summary>
 public sealed class KeyboardPresentationController : IPresentationController
@@ -13,6 +13,17 @@ public sealed class KeyboardPresentationController : IPresentationController
     private readonly IForegroundWindowProvider _foreground;
     private readonly ILogger _logger;
     private volatile bool _restrictToPowerPoint = true;
+    private volatile PresentationTarget _target;
+
+    public PresentationTarget Target
+    {
+        get => _target;
+        set
+        {
+            if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value));
+            _target = value;
+        }
+    }
 
     public KeyboardPresentationController(IKeySender keys, IForegroundWindowProvider foreground, ILogger<KeyboardPresentationController>? logger = null)
     {
@@ -21,7 +32,7 @@ public sealed class KeyboardPresentationController : IPresentationController
         _logger = (ILogger?)logger ?? NullLogger.Instance;
     }
 
-    /// <summary>Only send keys while PowerPoint is the active window. On by default.</summary>
+    /// <summary>Restricts PowerPoint mode to its foreground app. PDF mode always restricts its target.</summary>
     public bool RestrictToPowerPoint
     {
         get => _restrictToPowerPoint;
@@ -52,7 +63,10 @@ public sealed class KeyboardPresentationController : IPresentationController
     private CommandResult Send(PresentationCommand command)
     {
         var window = _foreground.GetForegroundWindow();
-        var rejection = PowerPointTargetPolicy.Check(command, window, RestrictToPowerPoint);
+        var target = Target;
+        var rejection = target == PresentationTarget.Pdf
+            ? PdfTargetPolicy.Check(command, window)
+            : PowerPointTargetPolicy.Check(command, window, RestrictToPowerPoint);
         if (rejection is not null)
         {
             _logger.LogInformation(
@@ -63,7 +77,14 @@ public sealed class KeyboardPresentationController : IPresentationController
             return rejection.Value;
         }
 
-        var key = KeyFor(command);
+        var key = target == PresentationTarget.Pdf ? command switch
+        {
+            PresentationCommand.Next => PresentationKey.PageDown,
+            PresentationCommand.Previous => PresentationKey.PageUp,
+            PresentationCommand.Start => PresentationKey.ControlL,
+            PresentationCommand.End => PresentationKey.Escape,
+            _ => throw new ArgumentOutOfRangeException(nameof(command)),
+        } : KeyFor(command);
         if (!_keys.TrySend(key, out var error))
         {
             _logger.LogWarning("Sending {Key} for {Command} failed: {Error}", key, command, error);
